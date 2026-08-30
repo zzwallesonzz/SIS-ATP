@@ -100,9 +100,11 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
 
   // Auto-generate username suggestion from name
   const handleNomeChange = (newNome: string) => {
-    setNome(newNome);
+    const nomeUpper = newNome.toUpperCase();
+    setNome(nomeUpper);
+
     if (!editingId && (!usuario || usuario.includes('.'))) {
-      const parts = newNome.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/);
+      const parts = nomeUpper.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/\s+/);
       if (parts.length >= 2) {
         setUsuario(`${parts[0]}.${parts[parts.length - 1]}`);
       } else if (parts.length === 1 && parts[0]) {
