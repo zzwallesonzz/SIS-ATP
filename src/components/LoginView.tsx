@@ -106,11 +106,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ usuarios, onLogin }) => {
             </div>
             
             <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white leading-tight">
-              Sistema de Tabulação de Atendimento
+              SIS ATP
             </h1>
             
             <p className="text-sm text-slate-300 leading-relaxed">
-              Plataforma corporativa para negociações de acordos, atendimento a alunos e registro de protocolos de retenção e regularização acadêmica.
+              Sistema de Tabulação de Atendimento.
             </p>
           </div>
 
@@ -188,7 +188,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ usuarios, onLogin }) => {
                 <Lock className="w-6 h-6" />
               </div>
               <h2 className="text-xl sm:text-2xl font-black text-white">
-                Identificação de Usuário
+                Login - Acessar Sistema
               </h2>
               <p className="text-xs text-slate-400">
                 Entre com seu login e senha cadastrados para acessar o sistema
@@ -221,7 +221,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ usuarios, onLogin }) => {
                     type="text"
                     value={usernameInput}
                     onChange={(e) => setUsernameInput(e.target.value)}
-                    placeholder="Ex: wsbarbosa ou admin"
+                    placeholder="Digite seu usuário"
                     autoFocus
                     required
                     className="w-full text-sm bg-slate-950 text-white border border-slate-700 focus:border-indigo-500 rounded-xl pl-8 pr-3.5 py-3 outline-none transition-all focus:ring-2 focus:ring-indigo-500/20 font-mono"
@@ -236,7 +236,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ usuarios, onLogin }) => {
                     <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
                     SENHA
                   </span>
-                  <span className="text-[10px] text-slate-500 font-normal">Padrão demo: 123456</span>
+                  <span className="text-[10px] text-slate-500 font-normal"></span>
                 </label>
                 <div className="relative">
                   <input

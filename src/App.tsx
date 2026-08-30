@@ -447,8 +447,8 @@ export default function App() {
           />
         )}
 
-        {/* Tab 4: Conexão Supabase (Apenas Supervisor e ADM) */}
-        {activeTab === 'supabase' && isSupervisorOrAdm && (
+        {/* Tab 4: Conexão Supabase (Apenas ADM) */}
+        {activeTab === 'supabase' && isAdm && (
           <SupabaseView
             alunos={alunos}
             tabulacoes={tabulacoes}
@@ -469,7 +469,7 @@ export default function App() {
             <span>Usuário: <strong>{currentUser.nome}</strong> ({currentUser.perfil})</span>
             <span>•</span>
             <span>Tabulações: <strong>{tabulacoes.length}</strong></span>
-            {isSupervisorOrAdm && (
+            {isAdm && (
               <>
                 <span>•</span>
                 <span>Usuários: <strong>{usuarios.length}</strong></span>
