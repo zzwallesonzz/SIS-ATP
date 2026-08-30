@@ -330,7 +330,8 @@ export default function App() {
   }
 
   const isOperador = currentUser.perfil === 'Operador';
-  const isSupervisorOrAdm = currentUser.perfil === 'Supervisor' || currentUser.perfil === 'ADM';
+  const isAdm = currentUser.perfil === 'ADM';
+  const isSupervisorOrAdm = currentUser.perfil === 'Supervisor' || isAdm;
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-900 selection:bg-indigo-500 selection:text-white">
