@@ -152,38 +152,85 @@ export async function saveAlunoSupabase(aluno: Aluno): Promise<{ data: Aluno | n
       matricula: aluno.matricula,
       email: aluno.email,
       telefone: aluno.telefone,
-      ra: aluno.ra,
-      curso: aluno.curso,
-      polo: aluno.polo,
-      status_academico: aluno.statusAcademico,
+      ra: aluno.ra || null,
+      curso: aluno.curso || null,
+      polo: aluno.polo || null,
+      status_academico: aluno.statusAcademico || 'ATIVO',
+      data_cadastro: aluno.dataCadastro || getSaoPauloISOString(),
     };
 
     if (isValidUUID(aluno.id)) {
       payload.id = aluno.id;
     }
 
-    const { data, error } = await supabase
-      .from('alunos')
-      .upsert(payload, { onConflict: 'cpf' })
-      .select()
-      .single();
+    let currentPayload = { ...payload };
+    let finalData: any = null;
+    let lastError: any = null;
 
-    if (error) {
-      return { data: null, error: error.message };
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { data, error } = await supabase
+        .from('alunos')
+        .upsert(currentPayload, { onConflict: 'cpf' })
+        .select()
+        .single();
+
+      if (!error && data) {
+        finalData = data;
+        lastError = null;
+        break;
+      }
+
+      lastError = error;
+      const errMsg = error?.message || '';
+      console.warn(`Tentativa ${attempt + 1} de salvar aluno no Supabase retornou:`, errMsg);
+
+      if (errMsg.includes('status_academico') && 'status_academico' in currentPayload) {
+        delete currentPayload.status_academico;
+        continue;
+      }
+      if (errMsg.includes('ra') && 'ra' in currentPayload) {
+        delete currentPayload.ra;
+        continue;
+      }
+      if (errMsg.includes('curso') && 'curso' in currentPayload) {
+        delete currentPayload.curso;
+        continue;
+      }
+      if (errMsg.includes('polo') && 'polo' in currentPayload) {
+        delete currentPayload.polo;
+        continue;
+      }
+      if (errMsg.includes('data_cadastro') && 'data_cadastro' in currentPayload) {
+        delete currentPayload.data_cadastro;
+        continue;
+      }
+
+      const colMatch = errMsg.match(/column "([^"]+)" of relation "alunos" does not exist/) ||
+                       errMsg.match(/Could not find the '([^']+)' column of 'alunos'/);
+      if (colMatch && colMatch[1] && colMatch[1] in currentPayload) {
+        delete currentPayload[colMatch[1]];
+        continue;
+      }
+
+      break;
+    }
+
+    if (lastError || !finalData) {
+      return { data: null, error: lastError?.message || 'Erro ao salvar aluno no Supabase' };
     }
 
     const savedAluno: Aluno = {
-      id: data.id,
-      cpf: data.cpf,
-      nome: data.nome,
-      matricula: data.matricula,
-      email: data.email,
-      telefone: data.telefone,
-      ra: data.ra || '',
-      curso: data.curso || '',
-      polo: data.polo || '',
-      statusAcademico: data.status_academico || 'Ativo',
-      dataCadastro: data.data_cadastro,
+      id: finalData.id,
+      cpf: finalData.cpf,
+      nome: finalData.nome,
+      matricula: finalData.matricula,
+      email: finalData.email,
+      telefone: finalData.telefone,
+      ra: finalData.ra || '',
+      curso: finalData.curso || '',
+      polo: finalData.polo || '',
+      statusAcademico: finalData.status_academico || 'ATIVO',
+      dataCadastro: finalData.data_cadastro || aluno.dataCadastro,
     };
 
     return { data: savedAluno, error: null };
