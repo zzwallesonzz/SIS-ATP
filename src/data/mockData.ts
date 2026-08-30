@@ -1,15 +1,27 @@
 import { Aluno, CategoriaMotivoItem, Tabulacao, Usuario } from '../types';
 
 export const UNIDADES_LISTA = [
-  'Campus Central - São Paulo/SP',
-  'Polo Digital EAD',
-  'Polo BH Savassi - Belo Horizonte/MG',
-  'Campus Curitiba - Curitiba/PR',
-  'Campus Salvador - Salvador/BA',
-  'Campus Porto Alegre - Porto Alegre/RS',
-  'Campus Brasília - Brasília/DF',
-  'Campus Recife - Recife/PE',
-  'Unidade Geral / Matriz',
+'FORTALEZA - CE',
+'SAO LUIS - MA',
+'BELEM - PA',
+'TOM JOBIM - RJ',
+'MANAUS - AM',
+'ARACAJU - SE',
+'SALVADOR - BA',
+'NOVA IGUAÇU - RJ',
+'TAGUATINGA - DF',
+'MARACANÃ - RJ',
+'R9 TAQUARA - RJ',
+'JATIÚCA - AL',
+'ESTAÇÃO - GO',
+'TERESINA - PI',
+'ABDIAS DE CARVALHO - PE',
+'CABO FRIO - RJ',
+'NITEROI - RJ',
+'RECREIO - RJ',
+'CAMPO GRANDE - RJ',
+'SANTA CRUZ - RJ',
+'MACAPA - AP',
 ];
 
 export const ASSESSORIAS_ATENDIMENTO_LISTA = [
@@ -33,7 +45,7 @@ export const CATEGORIAS_MOTIVOS: CategoriaMotivoItem[] = [
   {
     id: 'negociacao',
     nome: 'NEGOCIAÇÃO',
-    descricao: 'Acordos, parcelamentos, promessas e quitação com desconto',
+    descricao: 'Promessas de Pagamento',
     iconName: 'CreditCard',
     submotivos: [
       'Acordo / Parcelamento de mensalidades em atraso',
@@ -49,17 +61,20 @@ export const CATEGORIAS_MOTIVOS: CategoriaMotivoItem[] = [
   {
     id: 'recusa',
     nome: 'RECUSA',
-    descricao: 'Dificuldades financeiras, contestações e desinteresse em negociar',
+    descricao: 'Dificuldades financeiras, recusas e contingências de contato',
     iconName: 'AlertCircle',
     submotivos: [
-      'Alega falta de condições financeiras no momento',
-      'Desemprego / Redução substancial de renda',
-      'Insatisfação com o curso / Instituição de ensino',
-      'Não reconhece os valores cobrados / Contestação',
-      'Recusou os planos de parcelamento ofertados',
-      'Desistência / Cancelamento ou trancamento do curso',
-      'Prefere comparecer ao polo presencialmente',
-      'Solicitou não receber mais contatos telefônicos',
+      'INTENÇÃO DE PAGAMENTO - FICOU DE ANALISAR PROPOSTA',
+      'PREVENTIVO - DISPARO DE FOLDERS/PROPOSTA',
+      'RECUSA - SEM CONDIÇÕES',
+      'RECUSA - ALEGA BOLSA',
+      'RECUSA - DESEMPREGO',
+      'RECUSA - DISCORDA DOS VALORES',
+      'AGENDAMENTO - ANÁLISE DE PROPOSTA',
+      'AGENDAMENTO - PREVISÃO DE PAGAMENTO FIM DO MÊS',
+      'INFORMAÇÃO - DÚVIDAS ACADÊMICAS',
+      'NÃO LOCALIZADO - ALUNO DESCONHECIDO',
+      'PREVENTIVO - 2 VIA DE BOLETO',
     ],
   },
   {
@@ -105,15 +120,15 @@ export const SETORES_DESTINO = [
 export const FRASES_RAPIDAS = [
   {
     categoria: 'Negociação',
-    texto: 'Aluno realizou acordo para regularização de pendências financeiras. Gerado boleto/PIX com desconto acordado e enviado via WhatsApp e e-mail.',
+    texto: 'Acordo realizado com sucesso.',
   },
   {
     categoria: 'Recusa',
-    texto: 'Aluno atendeu ao contato mas informou indisponibilidade financeira no momento. Recusou as condições de parcelamento ofertadas.',
+    texto: 'Aluno não aceitou a oferta',
   },
   {
     categoria: 'Informação',
-    texto: 'Prestadas informações detalhadas sobre extrato financeiro e valores em aberto. Aluno orientado quanto aos prazos e canais de pagamento.',
+    texto: 'Prestadas informações acadêmicas.',
   },
 ];
 

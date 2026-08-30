@@ -65,7 +65,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
       .map((u) => u.nome.trim())
       .filter(Boolean);
 
-    return Array.from(new Set(fromList)).sort((a, b) => a.localeCompare(b));
+    return Array.from(new Set(fromList) as Set<string>).sort((a: string, b: string) => a.localeCompare(b));
   }, [usuarios]);
 
   // Handle Edit User
