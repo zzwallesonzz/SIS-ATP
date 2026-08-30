@@ -30,7 +30,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   totalUsuarios,
 }) => {
   const isOperador = currentUser?.perfil === 'Operador';
-  const isSupervisorOrAdm = currentUser?.perfil === 'Supervisor' || currentUser?.perfil === 'ADM';
+  const isSupervisor = currentUser?.perfil === 'Supervisor';
+  const isAdm = currentUser?.perfil === 'ADM';
+  const isSupervisorOrAdm = isSupervisor || isAdm;
 
   return (
     <header className="bg-slate-900 text-white sticky top-0 z-40 shadow-md border-b border-slate-800">
@@ -110,8 +112,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {/* Tab: Supabase (Apenas Supervisor e ADM) */}
-            {isSupervisorOrAdm && (
+            {/* Tab: Supabase (Apenas ADM) */}
+            {isAdm && (
               <button
                 id="tab-btn-supabase"
                 onClick={() => setActiveTab('supabase')}
@@ -228,7 +230,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {isSupervisorOrAdm && (
+          {isAdm && (
             <button
               onClick={() => setActiveTab('supabase')}
               className={`flex flex-col items-center py-1 px-2 text-[11px] font-medium rounded ${
