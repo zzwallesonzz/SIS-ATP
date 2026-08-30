@@ -58,14 +58,14 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPerfil, setFilterPerfil] = useState<string>('Todos');
 
-  // List of active Supervisors available for Operator assignment
+  // Lista apenas dos supervisores realmente cadastrados no banco
   const supervisoresDisponiveis = useMemo(() => {
     const fromList = usuarios
-      .filter((u) => u.perfil === 'Supervisor')
-      .map((u) => u.nome);
-    // Combine with common default supervisors if empty
-    const unique = Array.from(new Set(['Carlos Santos Andrade', 'Juliana Rocha Silva', ...fromList]));
-    return unique;
+      .filter((u) => u.perfil === 'Supervisor' && u.ativo !== false)
+      .map((u) => u.nome.trim())
+      .filter(Boolean);
+
+    return Array.from(new Set(fromList)).sort((a, b) => a.localeCompare(b));
   }, [usuarios]);
 
   // Handle Edit User
@@ -481,30 +481,25 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                   Selecione o supervisor ao qual este operador responderá diretamente.
                 </p>
 
-                <select
-                  id="select-usuario-supervisor"
-                  value={supervisor}
-                  onChange={(e) => setSupervisor(e.target.value)}
-                  required
-                  className="w-full text-sm bg-white border border-indigo-300 focus:border-indigo-600 rounded-xl px-3.5 py-2.5 outline-none transition-all focus:ring-2 focus:ring-indigo-200 font-semibold text-slate-800"
-                >
-                  <option value="">Selecione um supervisor da lista...</option>
-                  {supervisoresDisponiveis.map((supNome) => (
-                    <option key={supNome} value={supNome}>
-                      {supNome} (Supervisor)
-                    </option>
-                  ))}
-                  <option value="Outro Supervisor">Outro Supervisor (Digitar abaixo)</option>
-                </select>
-
-                {supervisor === 'Outro Supervisor' && (
-                  <input
-                    type="text"
-                    placeholder="Digite o nome completo do supervisor..."
+                {supervisoresDisponiveis.length > 0 ? (
+                  <select
+                    id="select-usuario-supervisor"
+                    value={supervisor}
                     onChange={(e) => setSupervisor(e.target.value)}
-                    className="w-full text-sm bg-white border border-indigo-300 rounded-xl px-3.5 py-2 mt-2 outline-none"
-                    autoFocus
-                  />
+                    required
+                    className="w-full text-sm bg-white border border-indigo-300 focus:border-indigo-600 rounded-xl px-3.5 py-2.5 outline-none transition-all focus:ring-2 focus:ring-indigo-200 font-semibold text-slate-800"
+                  >
+                    <option value="">Selecione um supervisor da lista...</option>
+                    {supervisoresDisponiveis.map((supNome) => (
+                      <option key={supNome} value={supNome}>
+                        {supNome} (Supervisor)
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="p-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-xs font-medium">
+                    Nenhum supervisor cadastrado no sistema. Cadastre um supervisor antes de criar um operador.
+                  </div>
                 )}
               </div>
             ) : (
