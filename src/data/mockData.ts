@@ -13,13 +13,15 @@ export const UNIDADES_LISTA = [
 ];
 
 export const ASSESSORIAS_ATENDIMENTO_LISTA = [
-  'Assessoria de Cobrança & Negociação',
-  'Assessoria Financeira',
-  'Assessoria de Retenção & Relacionamento',
-  'Assessoria Acadêmica & Secretaria',
-  'Assessoria de Matrículas & Comercial',
-  'Assessoria de Suporte ao Aluno / AVA',
-  'Assessoria de Ouvidoria & Casos Especiais',
+  'INTERVALOR',
+  'SERVICE/CONCETRIX',
+  'JA-REZENDE',
+  'DDM',
+  'TRC',
+  'SOFI',
+  'FAMA',
+  'PG+',
+  'PEREIRA & MARQUES',
 ];
 
 export const STATUS_ALUNO_LISTA = [
