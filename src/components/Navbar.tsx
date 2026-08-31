@@ -8,13 +8,14 @@ import {
   LogOut,
   Shield,
   BadgeCheck,
-  User as UserIcon
+  User as UserIcon,
+  BarChart3
 } from 'lucide-react';
 import { Usuario } from '../types';
 
 interface NavbarProps {
-  activeTab: 'tabulacao' | 'historico' | 'usuarios' | 'supabase';
-  setActiveTab: (tab: 'tabulacao' | 'historico' | 'usuarios' | 'supabase') => void;
+  activeTab: 'tabulacao' | 'historico' | 'dashboard' | 'usuarios' | 'supabase';
+  setActiveTab: (tab: 'tabulacao' | 'historico' | 'dashboard' | 'usuarios' | 'supabase') => void;
   currentUser: Usuario | null;
   onLogout: () => void;
   totalTabulacoes: number;
@@ -90,6 +91,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </span>
               )}
             </button>
+
+            {/* Tab: Dashboard Operacional */}
+            {isSupervisorOrAdm && (
+              <button
+                id="tab-btn-dashboard"
+                onClick={() => setActiveTab('dashboard')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  activeTab === 'dashboard'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                Dashboard
+              </button>
+            )}
 
             {/* Tab: Gestão de Usuários (Apenas Supervisor e ADM) */}
             {isSupervisorOrAdm && (

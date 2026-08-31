@@ -8,6 +8,7 @@ import { TabulacaoForm } from './components/TabulacaoForm';
 import { HistoricoTabulacoes } from './components/HistoricoTabulacoes';
 import { UsuariosView } from './components/UsuariosView';
 import { SupabaseView } from './components/SupabaseModal';
+import { DashboardView } from './components/DashboardView';
 import { AlunoHistoricoModal } from './components/AlunoHistoricoModal';
 import { LoginView } from './components/LoginView';
 import { Aluno, Tabulacao, Usuario } from './types';
@@ -54,7 +55,7 @@ export default function App() {
   });
 
   // Navigation Tab
-  const [activeTab, setActiveTab] = useState<'tabulacao' | 'historico' | 'usuarios' | 'supabase'>('tabulacao');
+  const [activeTab, setActiveTab] = useState<'tabulacao' | 'historico' | 'dashboard' | 'usuarios' | 'supabase'>('tabulacao');
 
   // Operator identification (derived from currentUser)
   const [atendenteNome, setAtendenteNome] = useState<string>(() => currentUser?.nome || 'Wellington Barbosa');
@@ -67,7 +68,7 @@ export default function App() {
       setMatriculaAtendente(currentUser.matricula || `@${currentUser.usuario}`);
       
       // Role protection: If Operador, prevent accessing forbidden tabs
-      if (currentUser.perfil === 'Operador' && activeTab !== 'tabulacao' && activeTab !== 'historico') {
+      if (currentUser.perfil === 'Operador' && activeTab !== 'tabulacao' && activeTab !== 'historico' && activeTab !== 'dashboard') {
         setActiveTab('tabulacao');
       }
     }
@@ -439,7 +440,12 @@ export default function App() {
           />
         )}
 
-        {/* Tab 3: Gestão de Usuários (Apenas Supervisor e ADM) */}
+        {/* Tab 3: Dashboard Operacional */}
+        {activeTab === 'dashboard' && (
+          <DashboardView tabulacoes={tabulacoes} usuarios={usuarios} />
+        )}
+
+        {/* Tab 4: Gestão de Usuários (Apenas Supervisor e ADM) */}
         {activeTab === 'usuarios' && isSupervisorOrAdm && (
           <UsuariosView
             usuarios={usuarios}
