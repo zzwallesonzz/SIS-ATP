@@ -67,28 +67,18 @@ export const TabulacaoForm: React.FC<TabulacaoFormProps> = ({
   const [isTimerRunning, setIsTimerRunning] = useState(true);
 
   // Top Operational Lists (Unidade, Assessoria de Atendimento, Status do Aluno)
-  const normalizeStatus = (status?: string): string => {
-    if (!status) return 'ATIVO';
-    const upper = status.trim().toUpperCase();
-    return upper === 'ATIVO' ? 'ATIVO' : 'INATIVO';
-  };
-
-  const [unidade, setUnidade] = useState<string>(selectedAluno?.polo || UNIDADES_LISTA[0]);
-  const [assessoriaAtendimento, setAssessoriaAtendimento] = useState<string>(ASSESSORIAS_ATENDIMENTO_LISTA[0]);
-  const [statusAluno, setStatusAluno] = useState<string>(normalizeStatus(selectedAluno?.statusAcademico));
+  const [unidade, setUnidade] = useState<string>('');
+  const [assessoriaAtendimento, setAssessoriaAtendimento] = useState<string>('');
+  const [statusAluno, setStatusAluno] = useState<string>('');
 
   // Sync with selectedAluno when changed
   useEffect(() => {
-    if (selectedAluno?.polo) {
-      setUnidade(selectedAluno.polo);
-    }
-    if (selectedAluno?.statusAcademico) {
-      setStatusAluno(normalizeStatus(selectedAluno.statusAcademico));
-    }
+    setUnidade('');
+    setStatusAluno('');
   }, [selectedAluno]);
 
   // Form Fields
-  const [canalAtendimento, setCanalAtendimento] = useState<CanalAtendimento>('WhatsApp');
+  const [canalAtendimento, setCanalAtendimento] = useState<CanalAtendimento | ''>('');
   const [categoriaMotivo, setCategoriaMotivo] = useState<string>('NEGOCIAÇÃO');
   const [submotivo, setSubmotivo] = useState<string>(CATEGORIAS_MOTIVOS[0].submotivos[0]);
   
@@ -213,10 +203,10 @@ export const TabulacaoForm: React.FC<TabulacaoFormProps> = ({
     setProtocolo(generateProtocolo());
     setTimerSeconds(0);
     setIsTimerRunning(true);
-    setUnidade(UNIDADES_LISTA[0]);
-    setAssessoriaAtendimento(ASSESSORIAS_ATENDIMENTO_LISTA[0]);
-    setStatusAluno(STATUS_ALUNO_LISTA[0]);
-    setCanalAtendimento('WhatsApp');
+    setUnidade('');
+    setAssessoriaAtendimento('');
+    setStatusAluno('');
+    setCanalAtendimento('');
     setCategoriaMotivo('NEGOCIAÇÃO');
     setSubmotivo(CATEGORIAS_MOTIVOS[0].submotivos[0]);
     setTipoNegociacao('PIX');
@@ -239,6 +229,22 @@ export const TabulacaoForm: React.FC<TabulacaoFormProps> = ({
 
     if (!selectedAluno) {
       errs.aluno = 'Por favor, selecione ou cadastre um aluno antes de registrar a tabulação.';
+    }
+
+    if (!unidade.trim()) {
+      errs.unidade = 'Selecione a unidade do atendimento.';
+    }
+
+    if (!assessoriaAtendimento.trim()) {
+      errs.assessoriaAtendimento = 'Selecione a assessoria de atendimento.';
+    }
+
+    if (!statusAluno.trim()) {
+      errs.statusAluno = 'Selecione o status do aluno.';
+    }
+
+    if (!canalAtendimento) {
+      errs.canalAtendimento = 'Selecione o canal de atendimento.';
     }
 
     if (categoriaMotivo === 'NEGOCIAÇÃO') {
@@ -292,7 +298,7 @@ export const TabulacaoForm: React.FC<TabulacaoFormProps> = ({
       dataHora: nowSaoPauloISO,
       atendenteNome,
       matriculaAtendente,
-      canalAtendimento,
+      canalAtendimento: canalAtendimento as CanalAtendimento,
       categoriaMotivo,
       submotivo,
       tipoNegociacao: categoriaMotivo === 'NEGOCIAÇÃO' ? tipoNegociacao : undefined,
@@ -383,14 +389,16 @@ export const TabulacaoForm: React.FC<TabulacaoFormProps> = ({
                 id="select-unidade"
                 value={unidade}
                 onChange={(e) => setUnidade(e.target.value)}
-                className="w-full px-3 py-2 text-xs font-bold rounded-lg border border-slate-600 bg-slate-900 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
+                className={`w-full px-3 py-2 text-xs font-bold rounded-lg border bg-slate-900 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer ${errors.unidade ? 'border-rose-400' : 'border-slate-600'}`}
               >
+                <option value="" className="bg-slate-900 text-slate-400">Selecione a unidade</option>
                 {UNIDADES_LISTA.map((u) => (
                   <option key={u} value={u} className="bg-slate-900 text-white font-medium py-1">
                     {u}
                   </option>
                 ))}
               </select>
+              {errors.unidade && <p className="text-[10px] text-rose-300 mt-1.5 font-medium">{errors.unidade}</p>}
             </div>
           </div>
 
@@ -408,14 +416,16 @@ export const TabulacaoForm: React.FC<TabulacaoFormProps> = ({
                 id="select-assessoria-atendimento"
                 value={assessoriaAtendimento}
                 onChange={(e) => setAssessoriaAtendimento(e.target.value)}
-                className="w-full px-3 py-2 text-xs font-bold rounded-lg border border-slate-600 bg-slate-900 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer"
+                className={`w-full px-3 py-2 text-xs font-bold rounded-lg border bg-slate-900 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer ${errors.assessoriaAtendimento ? 'border-rose-400' : 'border-slate-600'}`}
               >
+                <option value="" className="bg-slate-900 text-slate-400">Selecione a assessoria</option>
                 {ASSESSORIAS_ATENDIMENTO_LISTA.map((a) => (
                   <option key={a} value={a} className="bg-slate-900 text-white font-medium py-1">
                     {a}
                   </option>
                 ))}
               </select>
+              {errors.assessoriaAtendimento && <p className="text-[10px] text-rose-300 mt-1.5 font-medium">{errors.assessoriaAtendimento}</p>}
             </div>
           </div>
 
@@ -439,14 +449,16 @@ export const TabulacaoForm: React.FC<TabulacaoFormProps> = ({
                     setComRenovacao(false);
                   }
                 }}
-                className="w-full px-3 py-2 text-xs font-bold rounded-lg border border-slate-600 bg-slate-900 text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all cursor-pointer"
+                className={`w-full px-3 py-2 text-xs font-bold rounded-lg border bg-slate-900 text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all cursor-pointer ${errors.statusAluno ? 'border-rose-400' : 'border-slate-600'}`}
               >
+                <option value="" className="bg-slate-900 text-slate-400">Selecione o status</option>
                 {STATUS_ALUNO_LISTA.map((s) => (
                   <option key={s} value={s} className="bg-slate-900 text-white font-medium py-1">
                     {s}
                   </option>
                 ))}
               </select>
+              {errors.statusAluno && <p className="text-[10px] text-rose-300 mt-1.5 font-medium">{errors.statusAluno}</p>}
             </div>
           </div>
         </div>
@@ -554,7 +566,7 @@ export const TabulacaoForm: React.FC<TabulacaoFormProps> = ({
             <span className="text-[11px] text-slate-400">Origem da interação</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3 ${errors.canalAtendimento ? 'rounded-xl border border-rose-200 bg-rose-50/40 p-2' : ''}`}>
             {canais.map((c) => {
               const isSelected = canalAtendimento === c.label;
               return (
@@ -582,6 +594,7 @@ export const TabulacaoForm: React.FC<TabulacaoFormProps> = ({
               );
             })}
           </div>
+          {errors.canalAtendimento && <p className="text-rose-500 text-xs font-medium mt-2">{errors.canalAtendimento}</p>}
         </div>
 
         {/* Section 2: Categoria (Macro-Assunto) & Submotivo */}
