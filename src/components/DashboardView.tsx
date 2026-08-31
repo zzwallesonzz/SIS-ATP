@@ -28,7 +28,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
       Array.from(
         new Set(
           usuarios
-            .filter((u) => (u.perfil === 'Supervisor' || u.perfil === 'ADM') && u.ativo !== false)
+            .filter((u) => u.perfil === 'Supervisor' && u.ativo !== false)
             .map((u) => u.nome)
         )
       ).sort(),
@@ -68,9 +68,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
         const operador = usuarios.find(
           (u) => u.matricula === tab.matriculaAtendente || u.nome === tab.atendenteNome
         );
-        const supervisorAtual = operador?.supervisor || (operador?.perfil === 'Supervisor' ? operador.nome : '');
 
-        if (supervisorAtual !== supervisor) {
+        const supervisorAtual = operador?.supervisor ||
+          (operador?.perfil === 'Supervisor' ? operador.nome : '');
+
+        if (!supervisorAtual || supervisorAtual !== supervisor) {
           return false;
         }
       }
