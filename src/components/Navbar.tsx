@@ -9,7 +9,8 @@ import {
   Shield,
   BadgeCheck,
   User as UserIcon,
-  BarChart3
+  BarChart3,
+  BriefcaseBusiness
 } from 'lucide-react';
 import { Usuario } from '../types';
 
@@ -32,8 +33,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const isOperador = currentUser?.perfil === 'Operador';
   const isSupervisor = currentUser?.perfil === 'Supervisor';
+  const isGerencial = currentUser?.perfil === 'Gerencial';
   const isAdm = currentUser?.perfil === 'ADM';
-  const isSupervisorOrAdm = isSupervisor || isAdm;
+  const isSupervisorOrAdm = isSupervisor || isGerencial || isAdm;
 
   return (
     <header className="bg-slate-900 text-white sticky top-0 z-40 shadow-md border-b border-slate-800">
@@ -158,12 +160,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                       ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
                       : currentUser.perfil === 'Supervisor'
                       ? 'bg-purple-950 text-purple-300 border border-purple-500/40'
+                      : currentUser.perfil === 'Gerencial'
+                      ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/40'
                       : 'bg-indigo-950 text-indigo-300 border border-indigo-500/40'
                   }`}>
                     {currentUser.perfil === 'ADM' ? (
                       <Shield className="w-4 h-4" />
                     ) : currentUser.perfil === 'Supervisor' ? (
                       <BadgeCheck className="w-4 h-4" />
+                    ) : currentUser.perfil === 'Gerencial' ? (
+                      <BriefcaseBusiness className="w-4 h-4" />
                     ) : (
                       <UserIcon className="w-4 h-4" />
                     )}
@@ -179,6 +185,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                           ? 'bg-emerald-500/20 text-emerald-300'
                           : currentUser.perfil === 'Supervisor'
                           ? 'bg-purple-500/20 text-purple-300'
+                          : currentUser.perfil === 'Gerencial'
+                          ? 'bg-cyan-500/20 text-cyan-300'
                           : 'bg-indigo-500/20 text-indigo-300'
                       }`}>
                         {currentUser.perfil}

@@ -66,10 +66,15 @@ export default function App() {
     if (currentUser) {
       setAtendenteNome(currentUser.nome);
       setMatriculaAtendente(currentUser.matricula || `@${currentUser.usuario}`);
-      
+
       // Role protection: If Operador, prevent accessing forbidden tabs
       if (currentUser.perfil === 'Operador' && activeTab !== 'tabulacao' && activeTab !== 'historico' && activeTab !== 'dashboard') {
         setActiveTab('tabulacao');
+      }
+
+      // Gerencial cannot access Supabase Ready screen
+      if (currentUser.perfil === 'Gerencial' && activeTab === 'supabase') {
+        setActiveTab('dashboard');
       }
     }
   }, [currentUser, activeTab]);
@@ -332,7 +337,8 @@ export default function App() {
 
   const isOperador = currentUser.perfil === 'Operador';
   const isAdm = currentUser.perfil === 'ADM';
-  const isSupervisorOrAdm = currentUser.perfil === 'Supervisor' || isAdm;
+  const isGerencial = currentUser.perfil === 'Gerencial';
+  const isSupervisorOrAdm = currentUser.perfil === 'Supervisor' || isGerencial || isAdm;
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-900 selection:bg-indigo-500 selection:text-white">

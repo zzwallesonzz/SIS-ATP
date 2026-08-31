@@ -373,6 +373,17 @@ export const INITIAL_USUARIOS: Usuario[] = [
   },
   {
     id: 'usr-03',
+    nome: 'Gerência Operacional',
+    usuario: 'gerencia.operacional',
+    senha: '123456',
+    perfil: 'Gerencial',
+    ativo: true,
+    matricula: 'GER-001',
+    emailCorporativo: 'gerencia@intervalor.com.br',
+    createdAt: '2026-01-12T08:15:00',
+  },
+  {
+    id: 'usr-04',
     nome: 'Administrador do Sistema',
     usuario: 'admin',
     senha: '123456',
@@ -383,7 +394,7 @@ export const INITIAL_USUARIOS: Usuario[] = [
     createdAt: '2026-01-01T00:00:00',
   },
   {
-    id: 'usr-04',
+    id: 'usr-05',
     nome: 'Wellington Barbosa',
     usuario: 'wsbarbosa',
     senha: '123456',
@@ -483,7 +494,7 @@ CREATE TABLE IF NOT EXISTS public.usuarios (
   nome VARCHAR(255) NOT NULL,
   usuario VARCHAR(100) UNIQUE NOT NULL,
   senha VARCHAR(255) NOT NULL,
-  perfil VARCHAR(50) NOT NULL CHECK (perfil IN ('Operador', 'Supervisor', 'ADM')),
+  perfil VARCHAR(50) NOT NULL CHECK (perfil IN ('Operador', 'Supervisor', 'Gerencial', 'ADM')),
   supervisor VARCHAR(255),
   matricula VARCHAR(50),
   email_corporativo VARCHAR(255),
@@ -508,9 +519,10 @@ WITH CHECK (true);
 -- Usuários Iniciais Padrão (Senha padrão: 123456)
 INSERT INTO public.usuarios (nome, usuario, senha, perfil, supervisor, matricula, email_corporativo, ativo)
 VALUES 
-  ('Administrador do Sistema', 'admin', '123456', 'ADM', NULL, 'ADM-001', 'admin@intervalor.com.br', true),
   ('Carlos Santos Andrade', 'carlos.santos', '123456', 'Supervisor', NULL, 'SUP-014', 'carlos.santos@intervalor.com.br', true),
   ('Juliana Rocha Silva', 'juliana.rocha', '123456', 'Supervisor', NULL, 'SUP-022', 'juliana.rocha@intervalor.com.br', true),
+  ('Gerência Operacional', 'gerencia.operacional', '123456', 'Gerencial', NULL, 'GER-001', 'gerencia@intervalor.com.br', true),
+  ('Administrador do Sistema', 'admin', '123456', 'ADM', NULL, 'ADM-001', 'admin@intervalor.com.br', true),
   ('Wellington Barbosa', 'wsbarbosa', '123456', 'Operador', 'Carlos Santos Andrade', 'OP-8821', 'wsbarbosa@intervalor.com.br', true),
   ('Beatriz Lima Ferreira', 'beatriz.lima', '123456', 'Operador', 'Juliana Rocha Silva', 'OP-7740', 'beatriz.lima@intervalor.com.br', true)
 ON CONFLICT (usuario) DO UPDATE SET

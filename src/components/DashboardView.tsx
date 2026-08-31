@@ -28,7 +28,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
       Array.from(
         new Set(
           usuarios
-            .filter((u) => u.perfil === 'Supervisor' || u.perfil === 'ADM')
+            .filter((u) => (u.perfil === 'Supervisor' || u.perfil === 'ADM') && u.ativo !== false)
             .map((u) => u.nome)
         )
       ).sort(),

@@ -95,7 +95,7 @@ export interface CategoriaMotivoItem {
   submotivos: string[];
 }
 
-export type PerfilUsuario = 'Operador' | 'Supervisor' | 'ADM';
+export type PerfilUsuario = 'Operador' | 'Supervisor' | 'Gerencial' | 'ADM';
 
 export interface Usuario {
   id: string;

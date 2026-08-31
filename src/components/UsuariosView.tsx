@@ -22,7 +22,8 @@ import {
   Sparkles,
   RefreshCw,
   Lock,
-  ChevronRight
+  ChevronRight,
+  BriefcaseBusiness
 } from 'lucide-react';
 import { Usuario, PerfilUsuario } from '../types';
 import { formatDateTimeBR, getSaoPauloISOString } from '../utils/cpf';
@@ -213,8 +214,9 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
     const total = usuarios.length;
     const operadores = usuarios.filter((u) => u.perfil === 'Operador').length;
     const supervisores = usuarios.filter((u) => u.perfil === 'Supervisor').length;
+    const gerenciais = usuarios.filter((u) => u.perfil === 'Gerencial').length;
     const adms = usuarios.filter((u) => u.perfil === 'ADM').length;
-    return { total, operadores, supervisores, adms };
+    return { total, operadores, supervisores, gerenciais, adms };
   }, [usuarios]);
 
   return (
@@ -233,13 +235,13 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
               Criação & Gestão de Usuários
             </h1>
             <p className="text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Cadastre e gerencie acessos com permissões segmentadas entre <strong>Operador</strong>, <strong>Supervisor</strong> e <strong>ADM</strong>.
+              Cadastre e gerencie acessos com permissões segmentadas entre <strong>Operador</strong>, <strong>Supervisor</strong>, <strong>Gerencial</strong> e <strong>ADM</strong>.
               A designação de supervisor é associada exclusivamente aos operadores de atendimento.
             </p>
           </div>
 
           {/* Quick Metrics Badges */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
             <div className="bg-slate-800/80 backdrop-blur-xs border border-slate-700/80 rounded-xl p-3 text-center">
               <span className="text-[11px] font-medium text-slate-400 block">Total Usuários</span>
               <span className="text-xl font-black text-white">{metrics.total}</span>
@@ -251,6 +253,10 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
             <div className="bg-purple-950/60 border border-purple-500/30 rounded-xl p-3 text-center">
               <span className="text-[11px] font-medium text-purple-300 block">Supervisores</span>
               <span className="text-xl font-black text-purple-400">{metrics.supervisores}</span>
+            </div>
+            <div className="bg-cyan-950/60 border border-cyan-500/30 rounded-xl p-3 text-center">
+              <span className="text-[11px] font-medium text-cyan-300 block">Gerencial</span>
+              <span className="text-xl font-black text-cyan-400">{metrics.gerenciais}</span>
             </div>
             <div className="bg-emerald-950/60 border border-emerald-500/30 rounded-xl p-3 text-center">
               <span className="text-[11px] font-medium text-emerald-300 block">ADMs</span>
@@ -387,14 +393,14 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
               </div>
             </div>
 
-            {/* 4. PERFIL (Operador | Supervisor | ADM) */}
+            {/* 4. PERFIL (Operador | Supervisor | Gerencial | ADM) */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
                 PERFIL DE ACESSO <span className="text-rose-500">*</span>
               </label>
 
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 
                 {/* Operador Pill */}
                 <button
@@ -440,6 +446,28 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                   </div>
                   <p className="text-xs font-bold leading-none">Supervisor</p>
                   <span className="text-[10px] text-slate-500 font-normal mt-1 block">Gestão Operacional</span>
+                </button>
+
+                {/* Gerencial Pill */}
+                <button
+                  type="button"
+                  id="perfil-btn-gerencial"
+                  onClick={() => {
+                    setPerfil('Gerencial');
+                    setSupervisor('');
+                  }}
+                  className={`p-3 rounded-xl border text-left transition-all relative ${
+                    perfil === 'Gerencial'
+                      ? 'bg-cyan-50/80 border-cyan-600 text-cyan-950 shadow-xs ring-1 ring-cyan-600'
+                      : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <BriefcaseBusiness className={`w-4 h-4 ${perfil === 'Gerencial' ? 'text-cyan-600' : 'text-slate-400'}`} />
+                    {perfil === 'Gerencial' && <Check className="w-3.5 h-3.5 text-cyan-600 font-bold" />}
+                  </div>
+                  <p className="text-xs font-bold leading-none">Gerencial</p>
+                  <span className="text-[10px] text-slate-500 font-normal mt-1 block">Gestão</span>
                 </button>
 
                 {/* ADM Pill */}
@@ -598,6 +626,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                 <option value="Todos">Todos os Perfis ({usuarios.length})</option>
                 <option value="Operador">Apenas Operadores ({metrics.operadores})</option>
                 <option value="Supervisor">Apenas Supervisores ({metrics.supervisores})</option>
+                <option value="Gerencial">Apenas Gerencial ({metrics.gerenciais})</option>
                 <option value="ADM">Apenas ADMs ({metrics.adms})</option>
               </select>
             </div>
@@ -655,6 +684,8 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : u.perfil === 'Supervisor'
                                 ? 'bg-purple-100 text-purple-800'
+                                : u.perfil === 'Gerencial'
+                                ? 'bg-cyan-100 text-cyan-800'
                                 : 'bg-indigo-100 text-indigo-800'
                             }`}>
                               {u.nome.charAt(0).toUpperCase()}
@@ -704,6 +735,12 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
                               <BadgeCheck className="w-3 h-3 text-purple-700" />
                               Supervisor
+                            </span>
+                          )}
+                          {u.perfil === 'Gerencial' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-cyan-100 text-cyan-800 border border-cyan-200">
+                              <BriefcaseBusiness className="w-3 h-3 text-cyan-700" />
+                              Gerencial
                             </span>
                           )}
                           {u.perfil === 'Operador' && (

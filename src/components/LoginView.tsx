@@ -13,7 +13,8 @@ import {
   CheckCircle2, 
   Sparkles,
   Info,
-  KeyRound
+  KeyRound,
+  BriefcaseBusiness
 } from 'lucide-react';
 import { Usuario, PerfilUsuario } from '../types';
 
@@ -152,6 +153,24 @@ export const LoginView: React.FC<LoginViewProps> = ({ usuarios, onLogin }) => {
                 </div>
                 <p className="text-slate-400 mt-1 leading-snug">
                   Visualização de todo o histórico da equipe, acompanhamento de metas, base de alunos e gestão de operadores subordinados.
+                </p>
+              </div>
+            </div>
+
+            {/* Gerencial Rule */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 flex items-start gap-3 text-left">
+              <div className="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-500/40 text-cyan-400 flex items-center justify-center shrink-0 mt-0.5">
+                <BriefcaseBusiness className="w-4 h-4" />
+              </div>
+              <div className="text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-cyan-300">Gerencial</span>
+                  <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.2 rounded-full font-semibold">
+                    Gestão & Relatórios
+                  </span>
+                </div>
+                <p className="text-slate-400 mt-1 leading-snug">
+                  Acesso ao dashboard e gestão de usuários, com restrição explícita à tela <strong>Supabase Ready</strong>.
                 </p>
               </div>
             </div>
