@@ -101,29 +101,29 @@ export default function App() {
   });
 
   // Auto-sync from Supabase on start if available
-  useEffect(() => {
-    async function loadCloudData() {
-      try {
-        const [cloudAlunos, cloudTabs, cloudUsrs] = await Promise.all([
-          fetchAlunosSupabase(),
-          fetchTabulacoesSupabase(),
-          fetchUsuariosSupabase(),
-        ]);
+  const loadCloudData = async () => {
+    try {
+      const [cloudAlunos, cloudTabs, cloudUsrs] = await Promise.all([
+        fetchAlunosSupabase(),
+        fetchTabulacoesSupabase(),
+        fetchUsuariosSupabase(),
+      ]);
 
-        if (cloudAlunos.data && cloudAlunos.data.length > 0) {
-          setAlunos(cloudAlunos.data);
-        }
-        if (cloudTabs.data && cloudTabs.data.length > 0) {
-          setTabulacoes(cloudTabs.data);
-        }
-        if (cloudUsrs.data && cloudUsrs.data.length > 0) {
-          setUsuarios(cloudUsrs.data);
-        }
-      } catch (err) {
-        console.warn('Supabase auto-fetch check:', err);
+      if (cloudAlunos.data && cloudAlunos.data.length > 0) {
+        setAlunos(cloudAlunos.data);
       }
+      if (cloudTabs.data && cloudTabs.data.length > 0) {
+        setTabulacoes(cloudTabs.data);
+      }
+      if (cloudUsrs.data && cloudUsrs.data.length > 0) {
+        setUsuarios(cloudUsrs.data);
+      }
+    } catch (err) {
+      console.warn('Supabase auto-fetch check:', err);
     }
+  };
 
+  useEffect(() => {
     loadCloudData();
   }, []);
 
@@ -218,7 +218,7 @@ export default function App() {
   };
 
   // Search Aluno by CPF
-  const handleSearchCpf = (cpfToSearch: string) => {
+  const handleSearchCpf = async (cpfToSearch: string) => {
     const rawQuery = cleanDigits(cpfToSearch);
     if (!rawQuery) {
       setSelectedAluno(null);
@@ -227,13 +227,28 @@ export default function App() {
     }
 
     setSearchAttempted(true);
-    const found = alunos.find((a) => cleanDigits(a.cpf) === rawQuery);
+
+    const findAlunoByCpf = (items: Aluno[]) => items.find((a) => cleanDigits(String(a.cpf || '')) === rawQuery);
+    const found = findAlunoByCpf(alunos);
 
     if (found) {
       setSelectedAluno(found);
-    } else {
-      setSelectedAluno(null);
+      return;
     }
+
+    try {
+      const cloudResult = await fetchAlunosSupabase();
+      if (cloudResult.data && cloudResult.data.length > 0) {
+        setAlunos(cloudResult.data);
+        const syncedFound = findAlunoByCpf(cloudResult.data);
+        setSelectedAluno(syncedFound || null);
+        return;
+      }
+    } catch (err) {
+      console.warn('Falha ao recarregar alunos do Supabase na busca por CPF:', err);
+    }
+
+    setSelectedAluno(null);
   };
 
   // Save or Update Aluno

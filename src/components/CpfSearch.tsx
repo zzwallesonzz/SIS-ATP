@@ -31,13 +31,14 @@ export const CpfSearch: React.FC<CpfSearchProps> = ({
 }) => {
   const [inputVal, setInputVal] = useState(currentCpf);
 
-  // Keep input in sync if currentCpf changes externally
+  // Keep input in sync if currentCpf changes externally (e.g., from reset)
   React.useEffect(() => {
     setInputVal(currentCpf);
   }, [currentCpf]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatCPF(e.target.value);
+    const rawInput = e.target.value;
+    const formatted = formatCPF(rawInput);
     setInputVal(formatted);
     onCpfChange(formatted);
   };
@@ -45,6 +46,16 @@ export const CpfSearch: React.FC<CpfSearchProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      const digits = cleanDigits(inputVal);
+      if (digits.length === 11) {
+        onSearch(inputVal);
+      }
+    }
+  };
+
+  const handleSearchClick = () => {
+    const digits = cleanDigits(inputVal);
+    if (digits.length === 11) {
       onSearch(inputVal);
     }
   };
@@ -60,6 +71,7 @@ export const CpfSearch: React.FC<CpfSearchProps> = ({
   const digits = cleanDigits(inputVal);
   const isComplete = digits.length === 11;
   const isCpfValid = isComplete ? isValidCPF(inputVal) : null;
+  const canSearch = isComplete && (isCpfValid || true); // Allow search even if CPF format is incomplete, backend will validate
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 mb-6">
@@ -136,8 +148,8 @@ export const CpfSearch: React.FC<CpfSearchProps> = ({
         <button
           type="button"
           id="btn-buscar-cpf"
-          onClick={() => onSearch(inputVal)}
-          disabled={!inputVal}
+          onClick={handleSearchClick}
+          disabled={!canSearch}
           className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white disabled:text-slate-400 font-semibold rounded-xl transition-all shadow-sm shadow-indigo-600/20 active:scale-[0.98] cursor-pointer"
         >
           <Search className="w-4 h-4" />
