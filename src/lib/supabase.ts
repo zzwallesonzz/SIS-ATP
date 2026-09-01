@@ -555,6 +555,8 @@ export async function fetchUsuariosSupabase(): Promise<{ data: Usuario[] | null;
       matricula: row.matricula || undefined,
       emailCorporativo: row.email_corporativo || undefined,
       ativo: row.ativo !== false,
+      ultimoLogin: row.ultimo_login || undefined,
+      isOnline: row.is_online === true,
       createdAt: row.created_at,
     }));
 
@@ -665,3 +667,116 @@ export async function seedInitialDataToSupabase(
     errors,
   };
 }
+
+// ------------------------------------------------------------------
+// REALTIME MULTI-USER PRESENCE & BROADCAST
+// ------------------------------------------------------------------
+export interface PresenceUser {
+  userId: string;
+  usuario: string;
+  nome: string;
+  perfil: string;
+  onlineAt: string;
+}
+
+export function subscribeToRealtimePresence(
+  currentUser: Usuario | null,
+  onPresenceChange: (onlineMap: Record<string, PresenceUser>) => void,
+  onForceLogout?: (targetUserId: string, targetUsuario: string) => void
+) {
+  const presenceKey = currentUser?.usuario?.toLowerCase() || (currentUser?.id ? `id-${currentUser.id}` : `anon-${Date.now()}`);
+
+  const channel = supabase.channel('sis_atp_presence_room', {
+    config: {
+      presence: {
+        key: presenceKey,
+      },
+    },
+  });
+
+  channel
+    .on('presence', { event: 'sync' }, () => {
+      const state = channel.presenceState();
+      const onlineMap: Record<string, PresenceUser> = {};
+      Object.keys(state).forEach((key) => {
+        const presences = state[key] as any[];
+        if (presences && presences.length > 0) {
+          const first = presences[0];
+          if (first && first.usuario) {
+            onlineMap[first.usuario.toLowerCase()] = first;
+            if (first.userId) {
+              onlineMap[first.userId] = first;
+            }
+          }
+        }
+      });
+      onPresenceChange(onlineMap);
+    })
+    .on('broadcast', { event: 'force-logout' }, (payload: any) => {
+      if (payload && payload.payload) {
+        const { targetUserId, targetUsuario } = payload.payload;
+        if (onForceLogout) {
+          onForceLogout(targetUserId, targetUsuario);
+        }
+      }
+    })
+    .subscribe(async (status) => {
+      if (status === 'SUBSCRIBED' && currentUser) {
+        try {
+          await channel.track({
+            userId: currentUser.id,
+            usuario: currentUser.usuario.toLowerCase(),
+            nome: currentUser.nome,
+            perfil: currentUser.perfil,
+            onlineAt: currentUser.ultimoLogin || getSaoPauloISOString(),
+          });
+        } catch (e) {
+          console.warn('Realtime presence track exception:', e);
+        }
+      }
+    });
+
+  return {
+    channel,
+    track: async (user: Usuario) => {
+      try {
+        await channel.track({
+          userId: user.id,
+          usuario: user.usuario.toLowerCase(),
+          nome: user.nome,
+          perfil: user.perfil,
+          onlineAt: user.ultimoLogin || getSaoPauloISOString(),
+        });
+      } catch (e) {
+        console.warn('Presence track error:', e);
+      }
+    },
+    untrack: async () => {
+      try {
+        await channel.untrack();
+      } catch (e) {
+        console.warn('Presence untrack error:', e);
+      }
+    },
+    broadcastForceLogout: async (targetUserId: string, targetUsuario: string) => {
+      try {
+        await channel.send({
+          type: 'broadcast',
+          event: 'force-logout',
+          payload: { targetUserId, targetUsuario },
+        });
+      } catch (e) {
+        console.warn('Broadcast logout error:', e);
+      }
+    },
+    unsubscribe: () => {
+      try {
+        channel.untrack().catch(() => {});
+        channel.unsubscribe();
+      } catch (e) {
+        console.warn('Unsubscribe error:', e);
+      }
+    },
+  };
+}
+

@@ -17,6 +17,7 @@ import {
   BriefcaseBusiness
 } from 'lucide-react';
 import { Usuario, PerfilUsuario } from '../types';
+import { fetchUsuariosSupabase } from '../lib/supabase';
 
 interface LoginViewProps {
   usuarios: Usuario[];
@@ -30,7 +31,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ usuarios, onLogin }) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -48,9 +49,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ usuarios, onLogin }) => {
 
     setIsLoading(true);
 
-    setTimeout(() => {
-      // Find user
-      const foundUser = usuarios.find(
+    try {
+      // 1. Fetch freshest user data directly from Supabase if available
+      let userList = usuarios;
+      try {
+        const cloudUsrs = await fetchUsuariosSupabase();
+        if (cloudUsrs.data && cloudUsrs.data.length > 0) {
+          userList = cloudUsrs.data;
+        }
+      } catch (err) {
+        console.warn('Supabase fetch during login fallback to local list:', err);
+      }
+
+      // 2. Find user by username or matricula
+      const foundUser = userList.find(
         (u) => u.usuario.toLowerCase() === cleanUser || (u.matricula && u.matricula.toLowerCase() === cleanUser)
       );
 
@@ -60,25 +72,27 @@ export const LoginView: React.FC<LoginViewProps> = ({ usuarios, onLogin }) => {
         return;
       }
 
-      // Check if user is active
+      // 3. Check if user is active
       if (foundUser.ativo === false) {
         setErrorMessage('Este usuário está temporariamente desativado. Contate o administrador.');
         setIsLoading(false);
         return;
       }
 
-      // Check password
-      // Accept either matching password or standard default 123456
-      if (foundUser.senha !== cleanPass && cleanPass !== '123456') {
+      // 4. Strict Password Check (exact match with the updated password in the database)
+      if (foundUser.senha !== cleanPass) {
         setErrorMessage('Senha incorreta. Tente novamente.');
         setIsLoading(false);
         return;
       }
 
-      // Login success
+      // 5. Login success
       setIsLoading(false);
       onLogin(foundUser);
-    }, 350);
+    } catch (e: any) {
+      setErrorMessage('Erro ao autenticar. Tente novamente.');
+      setIsLoading(false);
+    }
   };
 
   // Quick fill helper for testing/demos

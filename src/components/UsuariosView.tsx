@@ -32,10 +32,12 @@ import {
 } from 'lucide-react';
 import { Usuario, PerfilUsuario } from '../types';
 import { formatDateTimeBR, getSaoPauloISOString } from '../utils/cpf';
+import { PresenceUser } from '../lib/supabase';
 
 interface UsuariosViewProps {
   usuarios: Usuario[];
   currentUser?: Usuario | null;
+  onlineUsersMap?: Record<string, PresenceUser>;
   onSaveUsuario: (usuario: Usuario) => void;
   onDeleteUsuario: (id: string) => void;
   onLogoutUsuario?: (id: string) => void;
@@ -44,6 +46,7 @@ interface UsuariosViewProps {
 export const UsuariosView: React.FC<UsuariosViewProps> = ({
   usuarios,
   currentUser,
+  onlineUsersMap = {},
   onSaveUsuario,
   onDeleteUsuario,
   onLogoutUsuario,
@@ -76,14 +79,27 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
 
   // Helper to determine if user is online
   const isUserOnline = (u: Usuario): boolean => {
-    if (currentUser && currentUser.id === u.id) return true;
+    if (currentUser && (currentUser.id === u.id || currentUser.usuario.toLowerCase() === u.usuario.toLowerCase())) {
+      return true;
+    }
+    const cleanUser = u.usuario.toLowerCase();
+    if (onlineUsersMap && (onlineUsersMap[cleanUser] || (u.id && onlineUsersMap[u.id]))) {
+      return true;
+    }
     return Boolean(u.isOnline);
   };
 
   // Helper to get last login timestamp
   const getUserLastLogin = (u: Usuario): string | undefined => {
-    if (currentUser && currentUser.id === u.id) {
+    const cleanUser = u.usuario.toLowerCase();
+    if (currentUser && (currentUser.id === u.id || currentUser.usuario.toLowerCase() === cleanUser)) {
       return u.ultimoLogin || currentUser.ultimoLogin || getSaoPauloISOString();
+    }
+    if (onlineUsersMap) {
+      const presence = onlineUsersMap[cleanUser] || (u.id ? onlineUsersMap[u.id] : null);
+      if (presence && presence.onlineAt) {
+        return presence.onlineAt;
+      }
     }
     return u.ultimoLogin;
   };
@@ -293,7 +309,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
       }
       return a.nome.localeCompare(b.nome);
     });
-  }, [usuarios, searchTerm, filterPerfil, filterOnline, sortBy, currentUser]);
+  }, [usuarios, searchTerm, filterPerfil, filterOnline, sortBy, currentUser, onlineUsersMap]);
 
   // Metrics
   const metrics = useMemo(() => {
@@ -304,7 +320,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
     const gerenciais = usuarios.filter((u) => u.perfil === 'Gerencial').length;
     const adms = usuarios.filter((u) => u.perfil === 'ADM').length;
     return { total, online, operadores, supervisores, gerenciais, adms };
-  }, [usuarios, currentUser]);
+  }, [usuarios, currentUser, onlineUsersMap]);
 
   return (
     <div className="space-y-6 animate-fadeIn">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, CheckCircle2, Sparkles } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { CpfSearch } from './components/CpfSearch';
@@ -22,7 +22,9 @@ import {
   fetchAlunosSupabase,
   fetchTabulacoesSupabase,
   fetchUsuariosSupabase,
-  searchAlunoByCpfSupabase
+  searchAlunoByCpfSupabase,
+  subscribeToRealtimePresence,
+  PresenceUser
 } from './lib/supabase';
 
 export default function App() {
@@ -57,6 +59,15 @@ export default function App() {
 
   // Navigation Tab
   const [activeTab, setActiveTab] = useState<'tabulacao' | 'historico' | 'dashboard' | 'usuarios' | 'supabase'>('tabulacao');
+
+  // Realtime Presence State (Track who is online in real-time across all browser sessions)
+  const [onlineUsersMap, setOnlineUsersMap] = useState<Record<string, PresenceUser>>({});
+  const presenceSubRef = useRef<{
+    track: (u: Usuario) => Promise<void>;
+    untrack: () => Promise<void>;
+    broadcastForceLogout: (targetUserId: string, targetUsuario: string) => Promise<void>;
+    unsubscribe: () => void;
+  } | null>(null);
 
   // Operator identification (derived from currentUser)
   const [atendenteNome, setAtendenteNome] = useState<string>(() => currentUser?.nome || 'Wellington Barbosa');
@@ -101,7 +112,7 @@ export default function App() {
     return INITIAL_TABULACOES;
   });
 
-  // Auto-sync from Supabase on start if available
+  // Auto-sync from Supabase on start and periodically
   const loadCloudData = async () => {
     try {
       const [cloudAlunos, cloudTabs, cloudUsrs] = await Promise.all([
@@ -126,7 +137,50 @@ export default function App() {
 
   useEffect(() => {
     loadCloudData();
+
+    // Periodic sync every 25 seconds
+    const interval = setInterval(() => {
+      loadCloudData();
+    }, 25000);
+
+    const onFocus = () => {
+      loadCloudData();
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
+
+  // Connect to Supabase Realtime Presence Channel for multi-user status
+  useEffect(() => {
+    const sub = subscribeToRealtimePresence(
+      currentUser,
+      (onlineMap) => {
+        setOnlineUsersMap(onlineMap);
+      },
+      (targetUserId, targetUsuario) => {
+        // Handle remote force-logout broadcast
+        if (currentUser) {
+          const isTarget =
+            (targetUserId && currentUser.id === targetUserId) ||
+            (targetUsuario && currentUser.usuario.toLowerCase() === targetUsuario.toLowerCase());
+          if (isTarget) {
+            handleLogout();
+          }
+        }
+      }
+    );
+
+    presenceSubRef.current = sub;
+
+    return () => {
+      sub.unsubscribe();
+      presenceSubRef.current = null;
+    };
+  }, [currentUser?.id, currentUser?.usuario]);
 
   // Active Selected Student & Search State (starts empty until searched or registered)
   const [currentCpf, setCurrentCpf] = useState<string>('');
@@ -179,18 +233,28 @@ export default function App() {
     setActiveTab('tabulacao');
 
     // Update in user list as well
-    setUsuarios((prev) =>
-      prev.map((u) => (u.id === user.id ? { ...u, ultimoLogin: nowIso, isOnline: true } : u))
-    );
+    setUsuarios((prev) => {
+      const idx = prev.findIndex((u) => u.id === user.id || u.usuario.toLowerCase() === user.usuario.toLowerCase());
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = updatedUser;
+        return copy;
+      }
+      return [updatedUser, ...prev];
+    });
 
     try {
       localStorage.setItem('tabulacoes_current_user', JSON.stringify(updatedUser));
     } catch (e) {
       console.error(e);
     }
+
+    // Broadcast presence online immediately
+    presenceSubRef.current?.track(updatedUser);
   };
 
   const handleLogout = () => {
+    presenceSubRef.current?.untrack();
     if (currentUser) {
       setUsuarios((prev) =>
         prev.map((u) => (u.id === currentUser.id ? { ...u, isOnline: false } : u))
@@ -207,12 +271,18 @@ export default function App() {
 
   // Force disconnect / logout another user (e.g. from Supervisor/ADM UsuariosView)
   const handleForceLogoutUsuario = (userId: string) => {
+    const targetUser = usuarios.find((u) => u.id === userId);
+    const targetUsuario = targetUser?.usuario || '';
+
     setUsuarios((prev) =>
       prev.map((u) => (u.id === userId ? { ...u, isOnline: false } : u))
     );
 
+    // Broadcast force-logout to the specific user session across all clients in real-time
+    presenceSubRef.current?.broadcastForceLogout(userId, targetUsuario);
+
     // If the logged-out user is the current session, log out immediately
-    if (currentUser && currentUser.id === userId) {
+    if (currentUser && (currentUser.id === userId || (targetUsuario && currentUser.usuario.toLowerCase() === targetUsuario.toLowerCase()))) {
       handleLogout();
     }
   };
@@ -533,6 +603,7 @@ export default function App() {
           <UsuariosView
             usuarios={usuarios}
             currentUser={currentUser}
+            onlineUsersMap={onlineUsersMap}
             onSaveUsuario={handleSaveUsuario}
             onDeleteUsuario={handleDeleteUsuario}
             onLogoutUsuario={handleForceLogoutUsuario}
