@@ -20,7 +20,9 @@ import {
   Building2,
   CalendarRange,
   RotateCcw,
-  Headphones
+  Headphones,
+  Download,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Aluno, Tabulacao } from '../types';
 import { 
@@ -52,7 +54,7 @@ export const HistoricoTabulacoes: React.FC<HistoricoTabulacoesProps> = ({
   const [campoDataFiltro, setCampoDataFiltro] = useState<'acordo' | 'vencimento'>('acordo');
   const [dataInicio, setDataInicio] = useState<string>('');
   const [dataFim, setDataFim] = useState<string>('');
-  const [filterTipoNegociacao, setFilterTipoNegociacao] = useState<string>('Todos');
+  const [filterRenovacao, setFilterRenovacao] = useState<string>('Todos');
   const [selectedTabulacao, setSelectedTabulacao] = useState<Tabulacao | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
@@ -116,10 +118,13 @@ export const HistoricoTabulacoes: React.FC<HistoricoTabulacoesProps> = ({
         t.protocolo.toLowerCase().includes(term) ||
         (t.tipoNegociacao && t.tipoNegociacao.toLowerCase().includes(term));
 
-      // 2. Tipo de Negociação match
-      const matchTipo =
-        filterTipoNegociacao === 'Todos' ||
-        t.tipoNegociacao === filterTipoNegociacao;
+      // 2. Condição de Renovação match (Com Renovação vs. Sem Renovação)
+      let matchRenovacao = true;
+      if (filterRenovacao === 'Com Renovação') {
+        matchRenovacao = t.comRenovacao === true;
+      } else if (filterRenovacao === 'Sem Renovação') {
+        matchRenovacao = t.comRenovacao === false || t.comRenovacao === undefined;
+      }
 
       // 3. Date Range filter (Data do Acordo vs. Data do Vencimento da Entrada)
       let matchDate = true;
@@ -146,9 +151,9 @@ export const HistoricoTabulacoes: React.FC<HistoricoTabulacoesProps> = ({
         matchDate = itemDateStr <= maxDate;
       }
 
-      return matchSearch && matchTipo && matchDate;
+      return matchSearch && matchRenovacao && matchDate;
     });
-  }, [negociacoes, searchTerm, filterTipoNegociacao, campoDataFiltro, dataInicio, dataFim, alunosMap]);
+  }, [negociacoes, searchTerm, filterRenovacao, campoDataFiltro, dataInicio, dataFim, alunosMap]);
 
   // Statistics calculation for negotiations
   const stats = useMemo(() => {
@@ -204,6 +209,118 @@ export const HistoricoTabulacoes: React.FC<HistoricoTabulacoesProps> = ({
     // Add Brazil country code 55 if not present
     const fullNumber = digits.length <= 11 ? `55${digits}` : digits;
     return `https://wa.me/${fullNumber}`;
+  };
+
+  // Export current filtered list to Excel-ready CSV
+  const handleExportCSV = () => {
+    if (filteredList.length === 0) return;
+
+    const headers = [
+      'Protocolo',
+      'Data e Hora do Acordo',
+      'Nome do Aluno',
+      'CPF do Aluno',
+      'Matrícula / RA',
+      'E-mail',
+      'WhatsApp / Telefone',
+      'Curso',
+      'Polo',
+      'Unidade',
+      'Status do Aluno',
+      'Assessoria',
+      'Tipo de Negociação',
+      'Condição de Renovação',
+      'Quantidade de Parcelas',
+      'Vencimento da Entrada',
+      'Valor da Entrada (R$)',
+      'Valor da Parcela (R$)',
+      'Valor Total do Acordo (R$)',
+      'Canal de Atendimento',
+      'Atendente',
+      'Matrícula Atendente',
+      'Status do Atendimento',
+      'Detalhamento / Ocorrência',
+    ];
+
+    const rows = filteredList.map((t) => {
+      const alunoObj = alunosMap[cleanDigits(t.alunoCpf)] || alunosMap[t.alunoCpf];
+      const email = t.alunoEmail || alunoObj?.email || '';
+      const telefone = t.alunoTelefone || alunoObj?.telefone || '';
+      const matricula = t.alunoRa || alunoObj?.matricula || alunoObj?.ra || '';
+      const curso = t.alunoCurso || alunoObj?.curso || '';
+      const polo = t.alunoPolo || alunoObj?.polo || '';
+
+      const renovacaoStr =
+        t.comRenovacao !== undefined
+          ? t.comRenovacao
+            ? 'Com Renovação'
+            : 'Sem Renovação'
+          : 'N/A';
+
+      const valorEntradaStr = t.valorEntrada
+        ? Number(t.valorEntrada).toFixed(2).replace('.', ',')
+        : '0,00';
+      const valorParcelaStr = t.valorParcela
+        ? Number(t.valorParcela).toFixed(2).replace('.', ',')
+        : '0,00';
+      const valorTotalStr = (t.valorTotalAcordo || t.valorEntrada || 0)
+        ? Number(t.valorTotalAcordo || t.valorEntrada || 0).toFixed(2).replace('.', ',')
+        : '0,00';
+
+      return [
+        t.protocolo,
+        formatDateTimeBR(t.dataHora),
+        t.alunoNome,
+        t.alunoCpf,
+        matricula,
+        email,
+        telefone,
+        curso,
+        polo,
+        t.unidade || '',
+        t.statusAluno || '',
+        t.assessoriaAtendimento || '',
+        t.tipoNegociacao || '',
+        renovacaoStr,
+        t.quantidadeParcelas || 1,
+        t.dataPrimeiraParcela ? formatDateBR(t.dataPrimeiraParcela) : '',
+        valorEntradaStr,
+        valorParcelaStr,
+        valorTotalStr,
+        t.canalAtendimento || '',
+        t.atendenteNome || '',
+        t.matriculaAtendente || '',
+        t.statusAtendimento || '',
+        t.detalhamento || '',
+      ];
+    });
+
+    const processRow = (row: (string | number)[]) => {
+      return row
+        .map((val) => {
+          const str = val === null || val === undefined ? '' : String(val);
+          if (str.includes(';') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+            return `"${str.replace(/"/g, '""')}"`;
+          }
+          return str;
+        })
+        .join(';');
+    };
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(processRow)].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    link.setAttribute('download', `relatorio_historico_negociacoes_${dateStr}.csv`);
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -322,24 +439,40 @@ export const HistoricoTabulacoes: React.FC<HistoricoTabulacoesProps> = ({
               )}
             </div>
 
-            {/* Tipo de Negociação Filter */}
-            <div className="flex items-center gap-2">
-              <label htmlFor="filter-tipo-neg" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                Tipo:
-              </label>
-              <select
-                id="filter-tipo-neg"
-                value={filterTipoNegociacao}
-                onChange={(e) => setFilterTipoNegociacao(e.target.value)}
-                className="text-xs font-bold px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+            {/* Actions: Renovação Filter + Export Button */}
+            <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+              {/* Condição de Renovação Filter */}
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="filter-renovacao" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                  Renovação:
+                </label>
+                <select
+                  id="filter-renovacao"
+                  value={filterRenovacao}
+                  onChange={(e) => setFilterRenovacao(e.target.value)}
+                  className="text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-2xs"
+                >
+                  <option value="Todos">Todas as Condições</option>
+                  <option value="Com Renovação">Com Renovação</option>
+                  <option value="Sem Renovação">Sem Renovação</option>
+                </select>
+              </div>
+
+              {/* Botão Exportar CSV/Excel */}
+              <button
+                type="button"
+                id="btn-exportar-historico"
+                onClick={handleExportCSV}
+                disabled={filteredList.length === 0}
+                title={filteredList.length === 0 ? 'Nenhuma negociação disponível para exportação com os filtros atuais' : `Exportar ${filteredList.length} registro(s) para planilha CSV / Excel`}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 disabled:pointer-events-none text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer whitespace-nowrap border border-emerald-500 shrink-0"
               >
-                <option value="Todos">Todos os Tipos</option>
-                <option value="PIX">PIX</option>
-                <option value="BOLETO">BOLETO</option>
-                <option value="CARTÃO DE CRÉDITO">CARTÃO DE CRÉDITO</option>
-                <option value="FGTS">FGTS</option>
-                <option value="FICOU FACIL">FICOU FÁCIL</option>
-              </select>
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Exportar</span>
+                <span className="px-1.5 py-0.5 rounded-md bg-emerald-700/90 text-[10px] font-extrabold text-emerald-100">
+                  {filteredList.length}
+                </span>
+              </button>
             </div>
           </div>
 
@@ -466,14 +599,14 @@ export const HistoricoTabulacoes: React.FC<HistoricoTabulacoesProps> = ({
               <p className="text-xs text-slate-500 mt-1">
                 Tente ajustar o filtro de datas ou os termos da busca.
               </p>
-              {(dataInicio || dataFim || searchTerm || filterTipoNegociacao !== 'Todos') && (
+              {(dataInicio || dataFim || searchTerm || filterRenovacao !== 'Todos') && (
                 <button
                   type="button"
                   onClick={() => {
                     setSearchTerm('');
                     setDataInicio('');
                     setDataFim('');
-                    setFilterTipoNegociacao('Todos');
+                    setFilterRenovacao('Todos');
                   }}
                   className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 transition-colors"
                 >

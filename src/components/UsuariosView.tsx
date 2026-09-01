@@ -342,50 +342,37 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-            {/* Quick Metrics Badges */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-800/80 p-2.5 rounded-2xl border border-slate-700/60 backdrop-blur-xs">
-              
-              {/* Online filter card */}
-              <div 
-                onClick={() => setFilterOnline(filterOnline === 'Online' ? 'Todos' : 'Online')}
-                className={`p-2.5 rounded-xl border text-center cursor-pointer transition-all ${
-                  filterOnline === 'Online' 
-                    ? 'bg-emerald-500/20 border-emerald-500/50 ring-1 ring-emerald-400' 
-                    : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
-                }`}
-                title="Filtrar apenas usuários logados"
-              >
-                <div className="flex items-center justify-center gap-1.5 mb-1">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                  <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Logados</span>
-                </div>
-                <p className="text-base font-extrabold text-white">{metrics.online} <span className="text-[10px] text-slate-400 font-normal">/ {metrics.total}</span></p>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            {/* Quick Metric Badge - Logados Only */}
+            <button 
+              type="button"
+              id="btn-filtro-logados"
+              onClick={() => setFilterOnline(filterOnline === 'Online' ? 'Todos' : 'Online')}
+              className={`px-4 py-2.5 rounded-2xl border text-center transition-all cursor-pointer flex items-center justify-between sm:justify-center gap-3 ${
+                filterOnline === 'Online' 
+                  ? 'bg-emerald-500/20 border-emerald-500/60 ring-2 ring-emerald-400/50 shadow-md shadow-emerald-950/40' 
+                  : 'bg-slate-800/80 border-slate-700/70 hover:bg-slate-800 hover:border-slate-600'
+              }`}
+              title="Clique para filtrar apenas usuários conectados"
+            >
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <span className="text-xs uppercase font-bold text-emerald-400 tracking-wider">Logados</span>
               </div>
-
-              <div className="p-2.5 bg-slate-900/60 rounded-xl border border-slate-800 text-center">
-                <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider block mb-1">Operadores</span>
-                <p className="text-base font-extrabold text-white">{metrics.operadores}</p>
-              </div>
-              <div className="p-2.5 bg-slate-900/60 rounded-xl border border-slate-800 text-center">
-                <span className="text-[10px] uppercase font-bold text-purple-400 tracking-wider block mb-1">Supervisores</span>
-                <p className="text-base font-extrabold text-white">{metrics.supervisores}</p>
-              </div>
-              <div className="p-2.5 bg-slate-900/60 rounded-xl border border-slate-800 text-center">
-                <span className="text-[10px] uppercase font-bold text-cyan-400 tracking-wider block mb-1">ADM / Gerencial</span>
-                <p className="text-base font-extrabold text-white">{metrics.adms + metrics.gerenciais}</p>
-              </div>
-            </div>
+              <p className="text-base font-extrabold text-white">
+                {metrics.online} <span className="text-xs text-slate-400 font-normal">/ {metrics.total}</span>
+              </p>
+            </button>
 
             {/* Cadastrar Novo Usuário Button */}
             <button
               type="button"
               id="btn-abrir-cadastro-usuario"
               onClick={handleOpenNewUserModal}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-lg shadow-indigo-600/30 transition-all border border-indigo-500 cursor-pointer shrink-0"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-lg shadow-indigo-600/30 transition-all border border-indigo-500 cursor-pointer shrink-0"
             >
               <UserPlus className="w-4 h-4" />
               <span>Cadastrar Novo Usuário</span>

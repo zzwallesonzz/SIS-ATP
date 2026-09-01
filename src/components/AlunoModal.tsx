@@ -4,7 +4,6 @@ import {
   UserPlus, 
   Check, 
   AlertCircle, 
-  Sparkles, 
   GraduationCap, 
   User, 
   Phone, 
@@ -53,12 +52,10 @@ export const AlunoModal: React.FC<AlunoModalProps> = ({
         telefone: alunoToEdit.telefone || '',
       });
     } else {
-      // Gera matrícula com apenas números: ano (4 dígitos) + 8 dígitos aleatórios = 12 dígitos
-      const generatedMatricula = `${new Date().getFullYear()}${Math.floor(10000000 + Math.random() * 90000000)}`;
       setFormData({
         cpf: initialCpf || '',
         nome: '',
-        matricula: generatedMatricula,
+        matricula: '',
         email: '',
         telefone: '',
       });
@@ -84,9 +81,12 @@ export const AlunoModal: React.FC<AlunoModalProps> = ({
       errs.nome = 'Nome completo é obrigatório (mínimo 3 letras).';
     }
 
-    // 3. Matrícula Validation
-    if (!formData.matricula || formData.matricula.trim().length < 2) {
+    // 3. Matrícula Validation (deve ter exatamente 12 caracteres/dígitos)
+    const cleanMatricula = formData.matricula.trim();
+    if (!cleanMatricula) {
       errs.matricula = 'Matrícula do aluno é obrigatória.';
+    } else if (cleanMatricula.length !== 12) {
+      errs.matricula = `A matrícula deve conter exatamente 12 caracteres (inseridos: ${cleanMatricula.length}).`;
     }
 
     // 4. E-mail Validation
@@ -128,12 +128,6 @@ export const AlunoModal: React.FC<AlunoModalProps> = ({
 
     onSave(alunoCompleto);
     onClose();
-  };
-
-  const generateNewMatricula = () => {
-    // Gera matrícula com apenas números: ano (4 dígitos) + 8 dígitos aleatórios = 12 dígitos
-    const generated = `${new Date().getFullYear()}${Math.floor(10000000 + Math.random() * 90000000)}`;
-    setFormData((prev) => ({ ...prev, matricula: generated }));
   };
 
   const isCpfValidFormat = cleanDigits(formData.cpf).length === 11 && isValidCPF(formData.cpf);
@@ -213,13 +207,15 @@ export const AlunoModal: React.FC<AlunoModalProps> = ({
                   <Hash className="w-3.5 h-3.5 text-indigo-600" />
                   Matrícula <span className="text-rose-500">*</span>
                 </label>
-                <button
-                  type="button"
-                  onClick={generateNewMatricula}
-                  className="text-[10px] text-indigo-600 hover:text-indigo-800 hover:underline font-semibold flex items-center gap-0.5"
-                >
-                  <Sparkles className="w-3 h-3" /> Auto-gerar
-                </button>
+                <span className={`text-[11px] font-mono font-medium ${
+                  formData.matricula.length === 12
+                    ? 'text-emerald-600 font-bold'
+                    : formData.matricula.length > 0
+                    ? 'text-amber-600'
+                    : 'text-slate-400'
+                }`}>
+                  {formData.matricula.length}/12 dígitos
+                </span>
               </div>
               <input
                 type="text"
@@ -229,7 +225,7 @@ export const AlunoModal: React.FC<AlunoModalProps> = ({
                   const onlyNumbers = e.target.value.replace(/\D/g, '');
                   setFormData({ ...formData, matricula: onlyNumbers });
                 }}
-                placeholder="Ex: 202601990001"
+                placeholder="000000000000 (12 dígitos)"
                 maxLength={12}
                 className={`w-full px-3.5 py-2.5 text-sm font-mono rounded-xl border bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${
                   errors.matricula ? 'border-rose-400 bg-rose-50/50 text-rose-900' : 'border-slate-300 text-slate-900'
