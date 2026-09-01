@@ -327,6 +327,7 @@ export const TabulacaoForm: React.FC<TabulacaoFormProps> = ({
 
   const canais: { label: CanalAtendimento; icon: string; description: string }[] = [
     { label: 'WhatsApp', icon: '💬', description: 'Mensagens e chat oficial' },
+    { label: 'WhatsApp - M360', icon: '📱', description: 'Atendimento via M360' },
     { label: 'Presencial', icon: '🏢', description: 'Atendimento no polo / campus' },
     { label: 'Telefone', icon: '📞', description: 'Chamada de voz (ativo/receptivo)' },
   ];
@@ -566,7 +567,7 @@ export const TabulacaoForm: React.FC<TabulacaoFormProps> = ({
             <span className="text-[11px] text-slate-400">Origem da interação</span>
           </div>
 
-          <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3 ${errors.canalAtendimento ? 'rounded-xl border border-rose-200 bg-rose-50/40 p-2' : ''}`}>
+          <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 ${errors.canalAtendimento ? 'rounded-xl border border-rose-200 bg-rose-50/40 p-2' : ''}`}>
             {canais.map((c) => {
               const isSelected = canalAtendimento === c.label;
               return (

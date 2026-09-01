@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { BarChart3, CalendarRange, Building2, Filter, Percent, TrendingUp, Users, Wallet } from 'lucide-react';
+import { BarChart3, CalendarRange, Building2, Filter, Percent, TrendingUp, Users, Wallet, FileSpreadsheet } from 'lucide-react';
 import { Tabulacao, Usuario } from '../types';
 
 interface DashboardViewProps {
@@ -13,6 +13,31 @@ const formatCurrency = (value: number) =>
     currency: 'BRL',
     minimumFractionDigits: 2,
   }).format(value || 0);
+
+const exportToCSV = (filename: string, headers: string[], rows: (string | number)[][]) => {
+  const processRow = (row: (string | number)[]) => {
+    return row
+      .map((val) => {
+        const str = val === null || val === undefined ? '' : String(val);
+        if (str.includes(';') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      })
+      .join(';');
+  };
+
+  const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(processRow)].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuarios }) => {
   const [dataInicio, setDataInicio] = useState('');
@@ -225,6 +250,54 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
     setAtendente('Todos');
     setUnidade('Todos');
     setTipoAtendimento('Todos');
+  };
+
+  const exportarResumoUnidade = () => {
+    if (tabelaPorUnidade.length === 0) return;
+    const headers = [
+      'Unidade',
+      'Atendimentos',
+      'Negociação',
+      'Recusas',
+      'Valor 1ª parcela (R$)',
+    ];
+    const rows = tabelaPorUnidade.map((linha) => [
+      linha.unidade,
+      linha.quantidadeAtendimentos,
+      linha.quantidadeNegociacao,
+      linha.quantidadeRecusas,
+      linha.valorPrimeiraParcela.toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+    ]);
+    const dateStr = new Date().toISOString().split('T')[0];
+    exportToCSV(`resumo_por_unidade_${dateStr}.csv`, headers, rows);
+  };
+
+  const exportarResumoOperador = () => {
+    if (tabelaPorOperador.length === 0) return;
+    const headers = [
+      'Operador',
+      'Supervisor',
+      'Atendimentos',
+      'Negociação',
+      'Recusas',
+      'Valor 1ª parcela (R$)',
+    ];
+    const rows = tabelaPorOperador.map((linha) => [
+      linha.operador,
+      linha.supervisor,
+      linha.quantidadeAtendimentos,
+      linha.quantidadeNegociacao,
+      linha.quantidadeRecusas,
+      linha.valorPrimeiraParcela.toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+    ]);
+    const dateStr = new Date().toISOString().split('T')[0];
+    exportToCSV(`resumo_por_operador_${dateStr}.csv`, headers, rows);
   };
 
   return (
@@ -493,9 +566,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="flex items-center gap-2 bg-slate-50 px-4 py-3 border-b border-slate-200">
-          <Building2 className="w-4 h-4 text-indigo-600" />
-          <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-800">Resumo por unidade</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-slate-50 px-4 py-3 border-b border-slate-200">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-indigo-600" />
+            <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-800">Resumo por unidade</h3>
+          </div>
+
+          <button
+            type="button"
+            onClick={exportarResumoUnidade}
+            disabled={tabelaPorUnidade.length === 0}
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 disabled:opacity-40 disabled:cursor-not-allowed border border-emerald-200/90 rounded-xl transition-all shadow-2xs cursor-pointer"
+            title="Exportar dados de unidades para planilha CSV"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>Exportar Planilha</span>
+          </button>
         </div>
 
         <div className="overflow-x-auto">
@@ -534,9 +620,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="flex items-center gap-2 bg-slate-50 px-4 py-3 border-b border-slate-200">
-          <Users className="w-4 h-4 text-indigo-600" />
-          <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-800">Resumo por operador</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-slate-50 px-4 py-3 border-b border-slate-200">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-indigo-600" />
+            <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-800">Resumo por operador</h3>
+          </div>
+
+          <button
+            type="button"
+            onClick={exportarResumoOperador}
+            disabled={tabelaPorOperador.length === 0}
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 disabled:opacity-40 disabled:cursor-not-allowed border border-emerald-200/90 rounded-xl transition-all shadow-2xs cursor-pointer"
+            title="Exportar dados de operadores para planilha CSV"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>Exportar Planilha</span>
+          </button>
         </div>
 
         <div className="overflow-x-auto">

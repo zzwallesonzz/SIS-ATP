@@ -22,6 +22,7 @@ export interface Aluno {
 
 export type CanalAtendimento = 
   | 'WhatsApp' 
+  | 'WhatsApp - M360'
   | 'Presencial' 
   | 'Telefone';
 
