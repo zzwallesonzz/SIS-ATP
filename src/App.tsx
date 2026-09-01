@@ -13,7 +13,7 @@ import { AlunoHistoricoModal } from './components/AlunoHistoricoModal';
 import { LoginView } from './components/LoginView';
 import { Aluno, Tabulacao, Usuario } from './types';
 import { INITIAL_ALUNOS, INITIAL_TABULACOES, INITIAL_USUARIOS } from './data/mockData';
-import { cleanDigits, normalizeCpf, formatCompleteCPF } from './utils/cpf';
+import { cleanDigits, normalizeCpf, formatCompleteCPF, getSaoPauloISOString } from './utils/cpf';
 import {
   saveAlunoSupabase,
   saveTabulacaoSupabase,
@@ -166,24 +166,54 @@ export default function App() {
 
   // Login & Logout Handlers
   const handleLogin = (user: Usuario) => {
-    setCurrentUser(user);
+    const nowIso = getSaoPauloISOString();
+    const updatedUser: Usuario = {
+      ...user,
+      ultimoLogin: nowIso,
+      isOnline: true,
+    };
+
+    setCurrentUser(updatedUser);
     setAtendenteNome(user.nome);
     setMatriculaAtendente(user.matricula || `@${user.usuario}`);
     setActiveTab('tabulacao');
+
+    // Update in user list as well
+    setUsuarios((prev) =>
+      prev.map((u) => (u.id === user.id ? { ...u, ultimoLogin: nowIso, isOnline: true } : u))
+    );
+
     try {
-      localStorage.setItem('tabulacoes_current_user', JSON.stringify(user));
+      localStorage.setItem('tabulacoes_current_user', JSON.stringify(updatedUser));
     } catch (e) {
       console.error(e);
     }
   };
 
   const handleLogout = () => {
+    if (currentUser) {
+      setUsuarios((prev) =>
+        prev.map((u) => (u.id === currentUser.id ? { ...u, isOnline: false } : u))
+      );
+    }
     setCurrentUser(null);
     setActiveTab('tabulacao');
     try {
       localStorage.removeItem('tabulacoes_current_user');
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  // Force disconnect / logout another user (e.g. from Supervisor/ADM UsuariosView)
+  const handleForceLogoutUsuario = (userId: string) => {
+    setUsuarios((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, isOnline: false } : u))
+    );
+
+    // If the logged-out user is the current session, log out immediately
+    if (currentUser && currentUser.id === userId) {
+      handleLogout();
     }
   };
 
@@ -502,8 +532,10 @@ export default function App() {
         {activeTab === 'usuarios' && isSupervisorOrAdm && (
           <UsuariosView
             usuarios={usuarios}
+            currentUser={currentUser}
             onSaveUsuario={handleSaveUsuario}
             onDeleteUsuario={handleDeleteUsuario}
+            onLogoutUsuario={handleForceLogoutUsuario}
           />
         )}
 

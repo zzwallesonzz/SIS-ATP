@@ -403,10 +403,11 @@ export const INITIAL_USUARIOS: Usuario[] = [
     ativo: true,
     matricula: 'OP-8821',
     emailCorporativo: 'wsbarbosa@intervalor.com.br',
+    ultimoLogin: '2026-09-01T11:20:00',
     createdAt: '2026-02-01T10:00:00',
   },
   {
-    id: 'usr-05',
+    id: 'usr-06',
     nome: 'Beatriz Lima Ferreira',
     usuario: 'beatriz.lima',
     senha: '123456',
@@ -415,6 +416,7 @@ export const INITIAL_USUARIOS: Usuario[] = [
     ativo: true,
     matricula: 'OP-9044',
     emailCorporativo: 'beatriz.lima@intervalor.com.br',
+    ultimoLogin: '2026-09-01T09:15:00',
     createdAt: '2026-02-10T14:15:00',
   }
 ];

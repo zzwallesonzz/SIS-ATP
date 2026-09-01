@@ -108,6 +108,8 @@ export interface Usuario {
   ativo?: boolean;
   emailCorporativo?: string;
   matricula?: string;
+  ultimoLogin?: string; // Data e hora do último login (ISO string)
+  isOnline?: boolean; // Sinalização se usuário está logado/ativo no momento
   createdAt: string;
 }
 
