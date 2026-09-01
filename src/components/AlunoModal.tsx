@@ -53,7 +53,8 @@ export const AlunoModal: React.FC<AlunoModalProps> = ({
         telefone: alunoToEdit.telefone || '',
       });
     } else {
-      const generatedMatricula = `MAT-${new Date().getFullYear()}${Math.floor(1000 + Math.random() * 9000)}`;
+      // Gera matrícula com apenas números: ano (4 dígitos) + 8 dígitos aleatórios = 12 dígitos
+      const generatedMatricula = `${new Date().getFullYear()}${Math.floor(10000000 + Math.random() * 90000000)}`;
       setFormData({
         cpf: initialCpf || '',
         nome: '',
@@ -130,7 +131,8 @@ export const AlunoModal: React.FC<AlunoModalProps> = ({
   };
 
   const generateNewMatricula = () => {
-    const generated = `MAT-${new Date().getFullYear()}${Math.floor(1000 + Math.random() * 9000)}`;
+    // Gera matrícula com apenas números: ano (4 dígitos) + 8 dígitos aleatórios = 12 dígitos
+    const generated = `${new Date().getFullYear()}${Math.floor(10000000 + Math.random() * 90000000)}`;
     setFormData((prev) => ({ ...prev, matricula: generated }));
   };
 
@@ -223,8 +225,12 @@ export const AlunoModal: React.FC<AlunoModalProps> = ({
                 type="text"
                 id="modal-input-matricula"
                 value={formData.matricula}
-                onChange={(e) => setFormData({ ...formData, matricula: e.target.value })}
-                placeholder="Ex: 20260199 ou MAT-20261234"
+                onChange={(e) => {
+                  const onlyNumbers = e.target.value.replace(/\D/g, '');
+                  setFormData({ ...formData, matricula: onlyNumbers });
+                }}
+                placeholder="Ex: 202601990001"
+                maxLength={12}
                 className={`w-full px-3.5 py-2.5 text-sm font-mono rounded-xl border bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${
                   errors.matricula ? 'border-rose-400 bg-rose-50/50 text-rose-900' : 'border-slate-300 text-slate-900'
                 }`}
