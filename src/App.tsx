@@ -13,7 +13,7 @@ import { AlunoHistoricoModal } from './components/AlunoHistoricoModal';
 import { LoginView } from './components/LoginView';
 import { Aluno, Tabulacao, Usuario } from './types';
 import { INITIAL_ALUNOS, INITIAL_TABULACOES, INITIAL_USUARIOS } from './data/mockData';
-import { cleanDigits } from './utils/cpf';
+import { cleanDigits, normalizeCpf, formatCompleteCPF } from './utils/cpf';
 import {
   saveAlunoSupabase,
   saveTabulacaoSupabase,
@@ -21,7 +21,8 @@ import {
   deleteUsuarioSupabase,
   fetchAlunosSupabase,
   fetchTabulacoesSupabase,
-  fetchUsuariosSupabase
+  fetchUsuariosSupabase,
+  searchAlunoByCpfSupabase
 } from './lib/supabase';
 
 export default function App() {
@@ -219,7 +220,7 @@ export default function App() {
 
   // Search Aluno by CPF
   const handleSearchCpf = async (cpfToSearch: string) => {
-    const rawQuery = cleanDigits(cpfToSearch);
+    const rawQuery = normalizeCpf(cpfToSearch);
     if (!rawQuery) {
       setSelectedAluno(null);
       setSearchAttempted(false);
@@ -228,7 +229,9 @@ export default function App() {
 
     setSearchAttempted(true);
 
-    const findAlunoByCpf = (items: Aluno[]) => items.find((a) => cleanDigits(String(a.cpf || '')) === rawQuery);
+    const findAlunoByCpf = (items: Aluno[]) =>
+      items.find((a) => normalizeCpf(a.cpf) === rawQuery);
+
     const found = findAlunoByCpf(alunos);
 
     if (found) {
@@ -237,6 +240,26 @@ export default function App() {
     }
 
     try {
+      // 1. Direct query in Supabase (handles leading zeros, mask, etc.)
+      const directSearch = await searchAlunoByCpfSupabase(cpfToSearch);
+      if (directSearch.data) {
+        setAlunos((prev) => {
+          const exists = prev.some(
+            (a) => a.id === directSearch.data!.id || normalizeCpf(a.cpf) === normalizeCpf(directSearch.data!.cpf)
+          );
+          return exists
+            ? prev.map((a) =>
+                a.id === directSearch.data!.id || normalizeCpf(a.cpf) === normalizeCpf(directSearch.data!.cpf)
+                  ? directSearch.data!
+                  : a
+              )
+            : [directSearch.data!, ...prev];
+        });
+        setSelectedAluno(directSearch.data);
+        return;
+      }
+
+      // 2. Fallback: fetch and refresh all students from Supabase
       const cloudResult = await fetchAlunosSupabase();
       if (cloudResult.data && cloudResult.data.length > 0) {
         setAlunos(cloudResult.data);
@@ -253,22 +276,31 @@ export default function App() {
 
   // Save or Update Aluno
   const handleSaveAluno = (aluno: Aluno) => {
-    const exists = alunos.some((a) => a.id === aluno.id || cleanDigits(a.cpf) === cleanDigits(aluno.cpf));
+    const formattedAluno = {
+      ...aluno,
+      cpf: formatCompleteCPF(aluno.cpf),
+    };
+
+    const exists = alunos.some(
+      (a) => a.id === formattedAluno.id || normalizeCpf(a.cpf) === normalizeCpf(formattedAluno.cpf)
+    );
     
     if (exists) {
       setAlunos((prev) =>
-        prev.map((a) => (a.id === aluno.id || cleanDigits(a.cpf) === cleanDigits(aluno.cpf) ? aluno : a))
+        prev.map((a) =>
+          a.id === formattedAluno.id || normalizeCpf(a.cpf) === normalizeCpf(formattedAluno.cpf) ? formattedAluno : a
+        )
       );
     } else {
-      setAlunos((prev) => [aluno, ...prev]);
+      setAlunos((prev) => [formattedAluno, ...prev]);
     }
 
     // Background sync to Supabase
-    saveAlunoSupabase(aluno).catch((e) => console.warn('Supabase save aluno sync:', e));
+    saveAlunoSupabase(formattedAluno).catch((e) => console.warn('Supabase save aluno sync:', e));
 
     // Auto-select this student for immediate tabulation
-    setSelectedAluno(aluno);
-    setCurrentCpf(aluno.cpf);
+    setSelectedAluno(formattedAluno);
+    setCurrentCpf(formattedAluno.cpf);
     setSearchAttempted(false);
     setActiveTab('tabulacao');
   };
@@ -342,7 +374,7 @@ export default function App() {
 
   // Filter attendances for active student
   const historicoAlunoAtivo = selectedAluno
-    ? tabulacoes.filter((t) => cleanDigits(t.alunoCpf) === cleanDigits(selectedAluno.cpf))
+    ? tabulacoes.filter((t) => normalizeCpf(t.alunoCpf) === normalizeCpf(selectedAluno.cpf))
     : [];
 
   // If no user is authenticated, render Login Screen

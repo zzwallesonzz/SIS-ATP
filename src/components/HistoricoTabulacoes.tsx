@@ -27,6 +27,8 @@ import {
   formatDateTimeBR, 
   formatDateBR, 
   cleanDigits,
+  normalizeCpf,
+  formatCPF,
   extractLocalDateOnly,
   getLocalDateString,
   getSaoPauloDateString
@@ -79,7 +81,9 @@ export const HistoricoTabulacoes: React.FC<HistoricoTabulacoesProps> = ({
   const alunosMap = useMemo(() => {
     const map: Record<string, Aluno> = {};
     alunos.forEach((a) => {
+      map[normalizeCpf(a.cpf)] = a;
       map[cleanDigits(a.cpf)] = a;
+      map[formatCPF(a.cpf)] = a;
       map[a.cpf] = a;
     });
     return map;

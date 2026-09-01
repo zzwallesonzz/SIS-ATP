@@ -13,7 +13,7 @@ import {
   GraduationCap
 } from 'lucide-react';
 import { Aluno, Tabulacao } from '../types';
-import { formatDateBR } from '../utils/cpf';
+import { formatDateBR, formatCPF } from '../utils/cpf';
 
 interface AlunoCardProps {
   aluno: Aluno;
@@ -52,7 +52,7 @@ export const AlunoCard: React.FC<AlunoCardProps> = ({
             <div className="flex items-center gap-2.5 text-xs text-slate-500 mt-1.5 flex-wrap">
               <span className="font-mono bg-slate-100 text-slate-800 px-2.5 py-0.5 rounded-md font-semibold border border-slate-200 flex items-center gap-1">
                 <CreditCard className="w-3 h-3 text-slate-500" />
-                CPF: {aluno.cpf}
+                CPF: {formatCPF(aluno.cpf)}
               </span>
               <span className="font-mono bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-md font-semibold border border-indigo-100 flex items-center gap-1">
                 <Hash className="w-3 h-3 text-indigo-600" />

@@ -8,7 +8,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { Aluno } from '../types';
-import { formatCPF, cleanDigits, isValidCPF } from '../utils/cpf';
+import { formatCPF, cleanDigits, normalizeCpf, isValidCPF, formatCompleteCPF } from '../utils/cpf';
 
 interface CpfSearchProps {
   currentCpf: string;
@@ -47,16 +47,18 @@ export const CpfSearch: React.FC<CpfSearchProps> = ({
     if (e.key === 'Enter') {
       e.preventDefault();
       const digits = cleanDigits(inputVal);
-      if (digits.length === 11) {
-        onSearch(inputVal);
+      if (digits.length >= 10) {
+        const fullCpf = formatCompleteCPF(inputVal);
+        onSearch(fullCpf);
       }
     }
   };
 
   const handleSearchClick = () => {
     const digits = cleanDigits(inputVal);
-    if (digits.length === 11) {
-      onSearch(inputVal);
+    if (digits.length >= 10) {
+      const fullCpf = formatCompleteCPF(inputVal);
+      onSearch(fullCpf);
     }
   };
 
@@ -69,9 +71,9 @@ export const CpfSearch: React.FC<CpfSearchProps> = ({
   };
 
   const digits = cleanDigits(inputVal);
-  const isComplete = digits.length === 11;
+  const isComplete = digits.length >= 10;
   const isCpfValid = isComplete ? isValidCPF(inputVal) : null;
-  const canSearch = isComplete && (isCpfValid || true); // Allow search even if CPF format is incomplete, backend will validate
+  const canSearch = digits.length >= 10;
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 mb-6">

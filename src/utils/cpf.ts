@@ -1,8 +1,28 @@
 /**
+ * Clean CPF removing non-digits
+ */
+export function cleanDigits(value: string): string {
+  return (value || '').toString().replace(/\D/g, '');
+}
+
+/**
+ * Normalizes CPF digits to exactly 11 numeric characters, adding leading zeros if needed
+ * (Crucial for CPFs starting with 0 that may have been stored as numbers or lost leading zero)
+ */
+export function normalizeCpf(value: string): string {
+  const digits = cleanDigits(value);
+  if (!digits) return '';
+  if (digits.length <= 11) {
+    return digits.padStart(11, '0');
+  }
+  return digits.slice(0, 11);
+}
+
+/**
  * Format string to Brazilian CPF mask: 000.000.000-00
  */
 export function formatCPF(value: string): string {
-  const digits = value.replace(/\D/g, '').slice(0, 11);
+  const digits = cleanDigits(value).slice(0, 11);
   return digits
     .replace(/^(\d{3})(\d)/, '$1.$2')
     .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
@@ -10,17 +30,19 @@ export function formatCPF(value: string): string {
 }
 
 /**
- * Clean CPF removing non-digits
+ * Formats a complete CPF, guaranteeing 11 digits with leading zeros
  */
-export function cleanDigits(value: string): string {
-  return value.replace(/\D/g, '');
+export function formatCompleteCPF(value: string): string {
+  const normalized = normalizeCpf(value);
+  if (!normalized) return '';
+  return formatCPF(normalized);
 }
 
 /**
  * Validates Brazilian CPF with algorithm (check digits calculation)
  */
 export function isValidCPF(cpf: string): boolean {
-  const digits = cleanDigits(cpf);
+  const digits = normalizeCpf(cpf);
   if (digits.length !== 11) return false;
 
   // Check known invalid sequence (all same digits)

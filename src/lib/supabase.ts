@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Aluno, Tabulacao, Usuario } from '../types';
-import { cleanDigits, getSaoPauloISOString } from '../utils/cpf';
+import { cleanDigits, normalizeCpf, formatCPF, formatCompleteCPF, getSaoPauloISOString } from '../utils/cpf';
 
 export const DEFAULT_SUPABASE_URL = 'https://hnlnirmiwsdurrpfdbtz.supabase.co';
 export const DEFAULT_SUPABASE_KEY = 'sb_publishable_ZGb_h9JcWzRv_tKjYvdBBA_RHko4ScQ';
@@ -126,7 +126,7 @@ export async function fetchAlunosSupabase(): Promise<{ data: Aluno[] | null; err
 
     const mapped: Aluno[] = data.map((row: any) => ({
       id: row.id,
-      cpf: cleanDigits(String(row.cpf || '')),
+      cpf: formatCompleteCPF(String(row.cpf || '')),
       nome: row.nome,
       matricula: row.matricula,
       email: row.email,
@@ -134,7 +134,7 @@ export async function fetchAlunosSupabase(): Promise<{ data: Aluno[] | null; err
       ra: row.ra || '',
       curso: row.curso || '',
       polo: row.polo || '',
-      statusAcademico: row.status_academico || 'Ativo',
+      statusAcademico: row.status_academico || 'ATIVO',
       dataCadastro: row.data_cadastro || new Date().toISOString(),
     }));
 
@@ -144,10 +144,66 @@ export async function fetchAlunosSupabase(): Promise<{ data: Aluno[] | null; err
   }
 }
 
+/**
+ * Searches a student directly in Supabase by CPF, checking multiple formatting variations
+ * (e.g. "03964199257", "3964199257", "039.641.992-57", "39.641.992-57")
+ */
+export async function searchAlunoByCpfSupabase(rawCpf: string): Promise<{ data: Aluno | null; error: string | null }> {
+  try {
+    const digits = cleanDigits(rawCpf);
+    if (!digits) return { data: null, error: null };
+
+    const padded = normalizeCpf(digits);
+    const unpadded = digits.replace(/^0+/, '');
+    const formattedWithMask = formatCompleteCPF(digits);
+    const rawFormatted = formatCPF(digits);
+
+    const candidates = Array.from(
+      new Set([padded, digits, unpadded, formattedWithMask, rawFormatted, rawCpf.trim()])
+    ).filter(Boolean);
+
+    const filterQuery = candidates.map((c) => `cpf.eq.${c}`).join(',');
+
+    const { data, error } = await supabase
+      .from('alunos')
+      .select('*')
+      .or(filterQuery)
+      .limit(1);
+
+    if (error) {
+      console.warn('Busca direta de aluno no Supabase retornou aviso/erro:', error.message);
+      return { data: null, error: error.message };
+    }
+
+    if (data && data.length > 0) {
+      const row = data[0];
+      const aluno: Aluno = {
+        id: row.id,
+        cpf: formatCompleteCPF(String(row.cpf || '')),
+        nome: row.nome,
+        matricula: row.matricula,
+        email: row.email,
+        telefone: row.telefone,
+        ra: row.ra || '',
+        curso: row.curso || '',
+        polo: row.polo || '',
+        statusAcademico: row.status_academico || 'ATIVO',
+        dataCadastro: row.data_cadastro || new Date().toISOString(),
+      };
+      return { data: aluno, error: null };
+    }
+
+    return { data: null, error: null };
+  } catch (err: any) {
+    return { data: null, error: err?.message || 'Erro ao consultar aluno por CPF' };
+  }
+}
+
 export async function saveAlunoSupabase(aluno: Aluno): Promise<{ data: Aluno | null; error: string | null }> {
   try {
+    const formattedCpf = formatCompleteCPF(aluno.cpf);
     const payload: any = {
-      cpf: cleanDigits(String(aluno.cpf || '')),
+      cpf: formattedCpf,
       nome: aluno.nome,
       matricula: aluno.matricula,
       email: aluno.email,
@@ -221,7 +277,7 @@ export async function saveAlunoSupabase(aluno: Aluno): Promise<{ data: Aluno | n
 
     const savedAluno: Aluno = {
       id: finalData.id,
-      cpf: finalData.cpf,
+      cpf: formatCompleteCPF(String(finalData.cpf || '')),
       nome: finalData.nome,
       matricula: finalData.matricula,
       email: finalData.email,
