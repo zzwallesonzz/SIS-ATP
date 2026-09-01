@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Aluno, Tabulacao, Usuario } from '../types';
-import { getSaoPauloISOString } from '../utils/cpf';
+import { cleanDigits, getSaoPauloISOString } from '../utils/cpf';
 
 export const DEFAULT_SUPABASE_URL = 'https://hnlnirmiwsdurrpfdbtz.supabase.co';
 export const DEFAULT_SUPABASE_KEY = 'sb_publishable_ZGb_h9JcWzRv_tKjYvdBBA_RHko4ScQ';
@@ -126,7 +126,7 @@ export async function fetchAlunosSupabase(): Promise<{ data: Aluno[] | null; err
 
     const mapped: Aluno[] = data.map((row: any) => ({
       id: row.id,
-      cpf: row.cpf,
+      cpf: cleanDigits(String(row.cpf || '')),
       nome: row.nome,
       matricula: row.matricula,
       email: row.email,
@@ -147,7 +147,7 @@ export async function fetchAlunosSupabase(): Promise<{ data: Aluno[] | null; err
 export async function saveAlunoSupabase(aluno: Aluno): Promise<{ data: Aluno | null; error: string | null }> {
   try {
     const payload: any = {
-      cpf: aluno.cpf,
+      cpf: cleanDigits(String(aluno.cpf || '')),
       nome: aluno.nome,
       matricula: aluno.matricula,
       email: aluno.email,

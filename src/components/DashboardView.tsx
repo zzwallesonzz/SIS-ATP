@@ -145,6 +145,44 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
     return Array.from(map.values()).sort((a, b) => b.quantidadeAtendimentos - a.quantidadeAtendimentos);
   }, [filteredTabulacoes]);
 
+  const tabelaPorOperador = useMemo(() => {
+    const map = new Map<string, {
+      operador: string;
+      supervisor: string;
+      quantidadeAtendimentos: number;
+      quantidadeNegociacao: number;
+      quantidadeRecusas: number;
+      valorPrimeiraParcela: number;
+    }>();
+
+    filteredTabulacoes.forEach((tab) => {
+      const key = tab.atendenteNome || 'Não informado';
+      const operador = usuarios.find(
+        (u) => u.matricula === tab.matriculaAtendente || u.nome === tab.atendenteNome
+      );
+      const supervisorAtual = operador?.supervisor || (operador?.perfil === 'Supervisor' ? operador.nome : 'Sem supervisor');
+
+      const entry = map.get(key) || {
+        operador: key,
+        supervisor: supervisorAtual,
+        quantidadeAtendimentos: 0,
+        quantidadeNegociacao: 0,
+        quantidadeRecusas: 0,
+        valorPrimeiraParcela: 0,
+      };
+
+      entry.quantidadeAtendimentos += 1;
+      if (tab.categoriaMotivo === 'NEGOCIAÇÃO') entry.quantidadeNegociacao += 1;
+      if (tab.categoriaMotivo === 'RECUSA') entry.quantidadeRecusas += 1;
+      entry.valorPrimeiraParcela += Number(tab.valorEntrada ?? tab.valorParcela ?? 0);
+      entry.supervisor = supervisorAtual || entry.supervisor;
+
+      map.set(key, entry);
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.quantidadeAtendimentos - a.quantidadeAtendimentos);
+  }, [filteredTabulacoes, usuarios]);
+
   const canalStats = useMemo(() => {
     const map = new Map<string, number>();
     filteredTabulacoes.forEach((tab) => {
@@ -486,6 +524,49 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
               ) : (
                 <tr>
                   <td colSpan={5} className="px-4 py-10 text-center text-sm text-slate-500">
+                    Nenhum atendimento encontrado para os filtros selecionados.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="flex items-center gap-2 bg-slate-50 px-4 py-3 border-b border-slate-200">
+          <Users className="w-4 h-4 text-indigo-600" />
+          <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-800">Resumo por operador</h3>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Operador</th>
+                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Supervisor</th>
+                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Atendimentos</th>
+                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Negociação</th>
+                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Recusas</th>
+                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Valor 1ª parcela</th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-200 bg-white">
+              {tabelaPorOperador.length > 0 ? (
+                tabelaPorOperador.map((linha) => (
+                  <tr key={linha.operador} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 text-sm font-semibold text-slate-800">{linha.operador}</td>
+                    <td className="px-4 py-3 text-sm text-slate-700">{linha.supervisor}</td>
+                    <td className="px-4 py-3 text-sm text-slate-700">{linha.quantidadeAtendimentos}</td>
+                    <td className="px-4 py-3 text-sm text-slate-700">{linha.quantidadeNegociacao}</td>
+                    <td className="px-4 py-3 text-sm text-slate-700">{linha.quantidadeRecusas}</td>
+                    <td className="px-4 py-3 text-sm font-bold text-emerald-700">{formatCurrency(linha.valorPrimeiraParcela)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-500">
                     Nenhum atendimento encontrado para os filtros selecionados.
                   </td>
                 </tr>
