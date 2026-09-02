@@ -52,9 +52,10 @@ export const HistoricoTabulacoes: React.FC<HistoricoTabulacoesProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [campoDataFiltro, setCampoDataFiltro] = useState<'acordo' | 'vencimento'>('acordo');
-  const [dataInicio, setDataInicio] = useState<string>('');
-  const [dataFim, setDataFim] = useState<string>('');
+  const [dataInicio, setDataInicio] = useState<string>(() => getSaoPauloDateString());
+  const [dataFim, setDataFim] = useState<string>(() => getSaoPauloDateString());
   const [filterRenovacao, setFilterRenovacao] = useState<string>('Todos');
+  const [filterOperador, setFilterOperador] = useState<string>('Todos');
   const [selectedTabulacao, setSelectedTabulacao] = useState<Tabulacao | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
@@ -98,7 +99,19 @@ export const HistoricoTabulacoes: React.FC<HistoricoTabulacoesProps> = ({
     });
   }, [scopedTabulacoes]);
 
-  // Filtered List by Search, Date Range, and Tipo de Negociação
+  // Unique operators list for filtering
+  const operadoresList = useMemo(() => {
+    const set = new Set<string>();
+    negociacoes.forEach((t) => {
+      const nome = t.atendenteNome?.trim();
+      if (nome) {
+        set.add(nome);
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [negociacoes]);
+
+  // Filtered List by Search, Operador, Renovação, and Date Range
   const filteredList = useMemo(() => {
     return negociacoes.filter((t) => {
       // 1. Search term match (Nome, CPF, Matrícula, E-mail, Telefone, Protocolo)
@@ -118,7 +131,12 @@ export const HistoricoTabulacoes: React.FC<HistoricoTabulacoesProps> = ({
         t.protocolo.toLowerCase().includes(term) ||
         (t.tipoNegociacao && t.tipoNegociacao.toLowerCase().includes(term));
 
-      // 2. Condição de Renovação match (Com Renovação vs. Sem Renovação)
+      // 2. Operador Filter match
+      const matchOperador =
+        filterOperador === 'Todos' ||
+        (t.atendenteNome && t.atendenteNome.trim().toLowerCase() === filterOperador.trim().toLowerCase());
+
+      // 3. Condição de Renovação match (Com Renovação vs. Sem Renovação)
       let matchRenovacao = true;
       if (filterRenovacao === 'Com Renovação') {
         matchRenovacao = t.comRenovacao === true;
@@ -126,7 +144,7 @@ export const HistoricoTabulacoes: React.FC<HistoricoTabulacoesProps> = ({
         matchRenovacao = t.comRenovacao === false || t.comRenovacao === undefined;
       }
 
-      // 3. Date Range filter (Data do Acordo vs. Data do Vencimento da Entrada)
+      // 4. Date Range filter (Data do Acordo vs. Data do Vencimento da Entrada)
       let matchDate = true;
       let itemDateStr = '';
       if (campoDataFiltro === 'acordo') {
@@ -151,9 +169,9 @@ export const HistoricoTabulacoes: React.FC<HistoricoTabulacoesProps> = ({
         matchDate = itemDateStr <= maxDate;
       }
 
-      return matchSearch && matchRenovacao && matchDate;
+      return matchSearch && matchOperador && matchRenovacao && matchDate;
     });
-  }, [negociacoes, searchTerm, filterRenovacao, campoDataFiltro, dataInicio, dataFim, alunosMap]);
+  }, [negociacoes, searchTerm, filterOperador, filterRenovacao, campoDataFiltro, dataInicio, dataFim, alunosMap]);
 
   // Statistics calculation for negotiations
   const stats = useMemo(() => {
@@ -418,29 +436,51 @@ export const HistoricoTabulacoes: React.FC<HistoricoTabulacoesProps> = ({
         <div className="p-5 border-b border-slate-200/80 bg-slate-50/70 space-y-4">
           
           {/* Top Search Row */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            {/* Search Input */}
-            <div className="relative flex-1">
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+            {/* Search Input - Reduced width */}
+            <div className="relative flex-1 max-w-md min-w-[240px]">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por Nome do Aluno, CPF, Matrícula, E-mail ou WhatsApp..."
-                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800 placeholder-slate-400"
+                placeholder="Buscar por Aluno, CPF, Matrícula, E-mail..."
+                className="w-full pl-10 pr-8 py-2.5 text-xs rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800 placeholder-slate-400"
               />
               {searchTerm && (
                 <button
+                  type="button"
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
-            {/* Actions: Renovação Filter + Export Button */}
+            {/* Actions: Operador Filter + Renovação Filter + Export Button */}
             <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+              {/* Filtro Nome do Operador */}
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="filter-operador" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap flex items-center gap-1">
+                  <User className="w-3.5 h-3.5 text-slate-400" />
+                  Operador:
+                </label>
+                <select
+                  id="filter-operador"
+                  value={filterOperador}
+                  onChange={(e) => setFilterOperador(e.target.value)}
+                  className="text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-2xs max-w-[170px] truncate"
+                >
+                  <option value="Todos">Todos os Operadores</option>
+                  {operadoresList.map((op) => (
+                    <option key={op} value={op}>
+                      {op}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Condição de Renovação Filter */}
               <div className="flex items-center gap-1.5">
                 <label htmlFor="filter-renovacao" className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
@@ -556,7 +596,7 @@ export const HistoricoTabulacoes: React.FC<HistoricoTabulacoesProps> = ({
                 type="button"
                 onClick={() => applyDatePreset('hoje')}
                 className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-colors ${
-                  dataInicio === getLocalDateString(new Date()) && dataFim === getLocalDateString(new Date())
+                  dataInicio === getSaoPauloDateString() && dataFim === getSaoPauloDateString()
                     ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
                     : 'bg-white text-slate-600 hover:bg-slate-100 border-slate-200'
                 }`}
@@ -599,18 +639,19 @@ export const HistoricoTabulacoes: React.FC<HistoricoTabulacoesProps> = ({
               <p className="text-xs text-slate-500 mt-1">
                 Tente ajustar o filtro de datas ou os termos da busca.
               </p>
-              {(dataInicio || dataFim || searchTerm || filterRenovacao !== 'Todos') && (
+              {(dataInicio || dataFim || searchTerm || filterRenovacao !== 'Todos' || filterOperador !== 'Todos') && (
                 <button
                   type="button"
                   onClick={() => {
                     setSearchTerm('');
-                    setDataInicio('');
-                    setDataFim('');
+                    setDataInicio(getSaoPauloDateString());
+                    setDataFim(getSaoPauloDateString());
                     setFilterRenovacao('Todos');
+                    setFilterOperador('Todos');
                   }}
-                  className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 transition-colors"
+                  className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 transition-colors cursor-pointer"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" /> Limpar todos os filtros
+                  <RotateCcw className="w-3.5 h-3.5" /> Limpar filtros (restaurar hoje)
                 </button>
               )}
             </div>
