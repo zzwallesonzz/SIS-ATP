@@ -109,14 +109,107 @@ export async function checkSupabaseHealth(): Promise<SupabaseHealthResult> {
 }
 
 // ------------------------------------------------------------------
+// CACHE & DEDUPLICATION STATE
+// ------------------------------------------------------------------
+let alunosCache: { data: Aluno[]; timestamp: number } | null = null;
+let tabulacoesCache: { data: Tabulacao[]; timestamp: number } | null = null;
+let usuariosCache: { data: Usuario[]; timestamp: number } | null = null;
+const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes memory cache
+
+export function invalidateSupabaseCache() {
+  alunosCache = null;
+  tabulacoesCache = null;
+  usuariosCache = null;
+}
+
+export function mapAlunoRow(row: any): Aluno {
+  return {
+    id: row.id,
+    cpf: formatCompleteCPF(String(row.cpf || '')),
+    nome: row.nome,
+    matricula: row.matricula,
+    email: row.email,
+    telefone: row.telefone,
+    ra: row.ra || '',
+    curso: row.curso || '',
+    polo: row.polo || '',
+    statusAcademico: row.status_academico || 'ATIVO',
+    dataCadastro: row.data_cadastro || new Date().toISOString(),
+  };
+}
+
+export function mapTabulacaoRow(row: any): Tabulacao {
+  return {
+    id: row.id,
+    protocolo: row.protocolo,
+    alunoId: row.aluno_id || '',
+    alunoCpf: row.aluno_cpf,
+    alunoNome: row.aluno_nome,
+    alunoRa: row.aluno_ra || '',
+    alunoCurso: row.aluno_curso || '',
+    alunoPolo: row.aluno_polo || '',
+    alunoEmail: row.aluno_email || '',
+    alunoTelefone: row.aluno_telefone || '',
+    unidade: row.unidade || '',
+    assessoriaAtendimento: row.assessoria_atendimento || '',
+    statusAluno: row.status_aluno || '',
+    dataHora: row.data_hora,
+    atendenteNome: row.atendente_nome,
+    matriculaAtendente: row.matricula_atendente,
+    canalAtendimento: row.canal_atendimento,
+    categoriaMotivo: row.categoria_motivo,
+    submotivo: row.submotivo,
+    tipoNegociacao: row.tipo_negociacao,
+    comRenovacao: row.com_renovacao !== undefined && row.com_renovacao !== null ? Boolean(row.com_renovacao) : undefined,
+    quantidadeParcelas: row.quantidade_parcelas ? Number(row.quantidade_parcelas) : undefined,
+    dataPrimeiraParcela: row.data_primeira_parcela,
+    valorEntrada: row.valor_entrada !== null && row.valor_entrada !== undefined ? Number(row.valor_entrada) : undefined,
+    valorParcela: row.valor_parcela !== null && row.valor_parcela !== undefined ? Number(row.valor_parcela) : undefined,
+    valorTotalAcordo: row.valor_total_acordo !== null && row.valor_total_acordo !== undefined ? Number(row.valor_total_acordo) : undefined,
+    statusAtendimento: row.status_atendimento || 'Resolvido no 1º Contato',
+    prioridade: row.prioridade || 'Média',
+    sentimento: row.sentimento || 'Neutro',
+    tempoAtendimentoMinutos: Number(row.tempo_atendimento_minutos) || 0,
+    detalhamento: row.detalhamento,
+    acoesTomadas: Array.isArray(row.acoes_tomadas) ? row.acoes_tomadas : [],
+    setorEncaminhado: row.setor_encaminhado,
+    dataRetornoAgendado: row.data_retorno_agendado,
+    observacoesInternas: row.observacoes_internas,
+    createdAt: row.created_at,
+  };
+}
+
+export function mapUsuarioRow(row: any): Usuario {
+  return {
+    id: row.id,
+    nome: row.nome,
+    usuario: row.usuario,
+    senha: row.senha,
+    perfil: row.perfil,
+    supervisor: row.supervisor || undefined,
+    matricula: row.matricula || undefined,
+    emailCorporativo: row.email_corporativo || undefined,
+    ativo: row.ativo !== false,
+    ultimoLogin: row.ultimo_login || undefined,
+    isOnline: row.is_online === true,
+    createdAt: row.created_at,
+  };
+}
+
+// ------------------------------------------------------------------
 // ALUNOS
 // ------------------------------------------------------------------
-export async function fetchAlunosSupabase(): Promise<{ data: Aluno[] | null; error: string | null }> {
+export async function fetchAlunosSupabase(forceRefresh = false, limitCount = 300): Promise<{ data: Aluno[] | null; error: string | null }> {
   try {
+    if (!forceRefresh && alunosCache && Date.now() - alunosCache.timestamp < CACHE_TTL_MS) {
+      return { data: alunosCache.data, error: null };
+    }
+
     const { data, error } = await supabase
       .from('alunos')
       .select('*')
-      .order('nome', { ascending: true });
+      .order('nome', { ascending: true })
+      .limit(limitCount);
 
     if (error) {
       return { data: null, error: error.message };
@@ -124,19 +217,8 @@ export async function fetchAlunosSupabase(): Promise<{ data: Aluno[] | null; err
 
     if (!data) return { data: [], error: null };
 
-    const mapped: Aluno[] = data.map((row: any) => ({
-      id: row.id,
-      cpf: formatCompleteCPF(String(row.cpf || '')),
-      nome: row.nome,
-      matricula: row.matricula,
-      email: row.email,
-      telefone: row.telefone,
-      ra: row.ra || '',
-      curso: row.curso || '',
-      polo: row.polo || '',
-      statusAcademico: row.status_academico || 'ATIVO',
-      dataCadastro: row.data_cadastro || new Date().toISOString(),
-    }));
+    const mapped: Aluno[] = data.map(mapAlunoRow);
+    alunosCache = { data: mapped, timestamp: Date.now() };
 
     return { data: mapped, error: null };
   } catch (err: any) {
@@ -298,12 +380,17 @@ export async function saveAlunoSupabase(aluno: Aluno): Promise<{ data: Aluno | n
 // ------------------------------------------------------------------
 // TABULAÇÕES
 // ------------------------------------------------------------------
-export async function fetchTabulacoesSupabase(): Promise<{ data: Tabulacao[] | null; error: string | null }> {
+export async function fetchTabulacoesSupabase(forceRefresh = false, limitCount = 300): Promise<{ data: Tabulacao[] | null; error: string | null }> {
   try {
+    if (!forceRefresh && tabulacoesCache && Date.now() - tabulacoesCache.timestamp < CACHE_TTL_MS) {
+      return { data: tabulacoesCache.data, error: null };
+    }
+
     const { data, error } = await supabase
       .from('tabulacoes')
       .select('*')
-      .order('data_hora', { ascending: false });
+      .order('data_hora', { ascending: false })
+      .limit(limitCount);
 
     if (error) {
       console.warn('Supabase fetchTabulacoes error:', error.message);
@@ -312,44 +399,8 @@ export async function fetchTabulacoesSupabase(): Promise<{ data: Tabulacao[] | n
 
     if (!data) return { data: [], error: null };
 
-    const mapped: Tabulacao[] = data.map((row: any) => ({
-      id: row.id,
-      protocolo: row.protocolo,
-      alunoId: row.aluno_id || '',
-      alunoCpf: row.aluno_cpf,
-      alunoNome: row.aluno_nome,
-      alunoRa: row.aluno_ra || '',
-      alunoCurso: row.aluno_curso || '',
-      alunoPolo: row.aluno_polo || '',
-      alunoEmail: row.aluno_email || '',
-      alunoTelefone: row.aluno_telefone || '',
-      unidade: row.unidade || '',
-      assessoriaAtendimento: row.assessoria_atendimento || '',
-      statusAluno: row.status_aluno || '',
-      dataHora: row.data_hora,
-      atendenteNome: row.atendente_nome,
-      matriculaAtendente: row.matricula_atendente,
-      canalAtendimento: row.canal_atendimento,
-      categoriaMotivo: row.categoria_motivo,
-      submotivo: row.submotivo,
-      tipoNegociacao: row.tipo_negociacao,
-      comRenovacao: row.com_renovacao !== undefined && row.com_renovacao !== null ? Boolean(row.com_renovacao) : undefined,
-      quantidadeParcelas: row.quantidade_parcelas ? Number(row.quantidade_parcelas) : undefined,
-      dataPrimeiraParcela: row.data_primeira_parcela,
-      valorEntrada: row.valor_entrada !== null && row.valor_entrada !== undefined ? Number(row.valor_entrada) : undefined,
-      valorParcela: row.valor_parcela !== null && row.valor_parcela !== undefined ? Number(row.valor_parcela) : undefined,
-      valorTotalAcordo: row.valor_total_acordo !== null && row.valor_total_acordo !== undefined ? Number(row.valor_total_acordo) : undefined,
-      statusAtendimento: row.status_atendimento || 'Resolvido no 1º Contato',
-      prioridade: row.prioridade || 'Média',
-      sentimento: row.sentimento || 'Neutro',
-      tempoAtendimentoMinutos: Number(row.tempo_atendimento_minutos) || 0,
-      detalhamento: row.detalhamento,
-      acoesTomadas: Array.isArray(row.acoes_tomadas) ? row.acoes_tomadas : [],
-      setorEncaminhado: row.setor_encaminhado,
-      dataRetornoAgendado: row.data_retorno_agendado,
-      observacoesInternas: row.observacoes_internas,
-      createdAt: row.created_at,
-    }));
+    const mapped: Tabulacao[] = data.map(mapTabulacaoRow);
+    tabulacoesCache = { data: mapped, timestamp: Date.now() };
 
     return { data: mapped, error: null };
   } catch (err: any) {
@@ -532,8 +583,12 @@ export async function saveTabulacaoSupabase(tab: Tabulacao): Promise<{ data: Tab
 // ------------------------------------------------------------------
 // USUÁRIOS
 // ------------------------------------------------------------------
-export async function fetchUsuariosSupabase(): Promise<{ data: Usuario[] | null; error: string | null }> {
+export async function fetchUsuariosSupabase(forceRefresh = false): Promise<{ data: Usuario[] | null; error: string | null }> {
   try {
+    if (!forceRefresh && usuariosCache && Date.now() - usuariosCache.timestamp < CACHE_TTL_MS) {
+      return { data: usuariosCache.data, error: null };
+    }
+
     const { data, error } = await supabase
       .from('usuarios')
       .select('*')
@@ -545,20 +600,8 @@ export async function fetchUsuariosSupabase(): Promise<{ data: Usuario[] | null;
 
     if (!data) return { data: [], error: null };
 
-    const mapped: Usuario[] = data.map((row: any) => ({
-      id: row.id,
-      nome: row.nome,
-      usuario: row.usuario,
-      senha: row.senha,
-      perfil: row.perfil,
-      supervisor: row.supervisor || undefined,
-      matricula: row.matricula || undefined,
-      emailCorporativo: row.email_corporativo || undefined,
-      ativo: row.ativo !== false,
-      ultimoLogin: row.ultimo_login || undefined,
-      isOnline: row.is_online === true,
-      createdAt: row.created_at,
-    }));
+    const mapped: Usuario[] = data.map(mapUsuarioRow);
+    usuariosCache = { data: mapped, timestamp: Date.now() };
 
     return { data: mapped, error: null };
   } catch (err: any) {
@@ -775,6 +818,85 @@ export function subscribeToRealtimePresence(
         channel.unsubscribe();
       } catch (e) {
         console.warn('Unsubscribe error:', e);
+      }
+    },
+  };
+}
+
+// ------------------------------------------------------------------
+// REALTIME DATABASE CHANGES (Ultra-low egress: pushes single rows only)
+// ------------------------------------------------------------------
+export function subscribeToDatabaseChanges(
+  onTabulacaoEvent: (event: 'INSERT' | 'UPDATE' | 'DELETE', row: Tabulacao | null, oldId?: string) => void,
+  onAlunoEvent: (event: 'INSERT' | 'UPDATE' | 'DELETE', row: Aluno | null, oldId?: string) => void,
+  onUsuarioEvent: (event: 'INSERT' | 'UPDATE' | 'DELETE', row: Usuario | null, oldId?: string) => void
+) {
+  const dbChannel = supabase.channel('sis_atp_db_realtime_sync');
+
+  dbChannel
+    // 1. Tabulações
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'tabulacoes' },
+      (payload) => {
+        invalidateSupabaseCache();
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          if (payload.new) {
+            const mapped = mapTabulacaoRow(payload.new);
+            onTabulacaoEvent(payload.eventType, mapped);
+          }
+        } else if (payload.eventType === 'DELETE') {
+          const oldId = payload.old?.id;
+          onTabulacaoEvent('DELETE', null, oldId);
+        }
+      }
+    )
+    // 2. Alunos
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'alunos' },
+      (payload) => {
+        invalidateSupabaseCache();
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          if (payload.new) {
+            const mapped = mapAlunoRow(payload.new);
+            onAlunoEvent(payload.eventType, mapped);
+          }
+        } else if (payload.eventType === 'DELETE') {
+          const oldId = payload.old?.id;
+          onAlunoEvent('DELETE', null, oldId);
+        }
+      }
+    )
+    // 3. Usuários
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'usuarios' },
+      (payload) => {
+        invalidateSupabaseCache();
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          if (payload.new) {
+            const mapped = mapUsuarioRow(payload.new);
+            onUsuarioEvent(payload.eventType, mapped);
+          }
+        } else if (payload.eventType === 'DELETE') {
+          const oldId = payload.old?.id;
+          onUsuarioEvent('DELETE', null, oldId);
+        }
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('Realtime database sync ativo.');
+      }
+    });
+
+  return {
+    unsubscribe: () => {
+      try {
+        dbChannel.unsubscribe();
+      } catch (err) {
+        console.warn('Error unsubscribing dbChannel:', err);
       }
     },
   };

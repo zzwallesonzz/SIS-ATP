@@ -161,9 +161,9 @@ export const SupabaseView: React.FC<SupabaseViewProps> = ({
 
     try {
       const [alunosRes, tabsRes, usrsRes] = await Promise.all([
-        fetchAlunosSupabase(),
-        fetchTabulacoesSupabase(),
-        fetchUsuariosSupabase(),
+        fetchAlunosSupabase(true),
+        fetchTabulacoesSupabase(true),
+        fetchUsuariosSupabase(true),
       ]);
 
       if (alunosRes.error || tabsRes.error || usrsRes.error) {

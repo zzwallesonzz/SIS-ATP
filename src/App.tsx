@@ -24,6 +24,7 @@ import {
   fetchUsuariosSupabase,
   searchAlunoByCpfSupabase,
   subscribeToRealtimePresence,
+  subscribeToDatabaseChanges,
   PresenceUser
 } from './lib/supabase';
 
@@ -112,13 +113,13 @@ export default function App() {
     return INITIAL_TABULACOES;
   });
 
-  // Auto-sync from Supabase on start and periodically
-  const loadCloudData = async () => {
+  // Initial Cloud Data Load (Cached & Throttled)
+  const loadCloudData = async (force = false) => {
     try {
       const [cloudAlunos, cloudTabs, cloudUsrs] = await Promise.all([
-        fetchAlunosSupabase(),
-        fetchTabulacoesSupabase(),
-        fetchUsuariosSupabase(),
+        fetchAlunosSupabase(force),
+        fetchTabulacoesSupabase(force),
+        fetchUsuariosSupabase(force),
       ]);
 
       if (cloudAlunos.data && cloudAlunos.data.length > 0) {
@@ -131,26 +132,66 @@ export default function App() {
         setUsuarios(cloudUsrs.data);
       }
     } catch (err) {
-      console.warn('Supabase auto-fetch check:', err);
+      console.warn('Supabase initial fetch check:', err);
     }
   };
 
+  // Real-time zero-egress row-level database updates & initial load
   useEffect(() => {
+    // 1. Initial background load once on startup
     loadCloudData();
 
-    // Periodic sync every 25 seconds
-    const interval = setInterval(() => {
-      loadCloudData();
-    }, 25000);
-
-    const onFocus = () => {
-      loadCloudData();
-    };
-    window.addEventListener('focus', onFocus);
+    // 2. Ultra-lightweight Realtime Row Stream (pushes only modified rows, eliminating polling egress)
+    const dbSub = subscribeToDatabaseChanges(
+      // Tabulações realtime events
+      (event, row, oldId) => {
+        if (event === 'INSERT' && row) {
+          setTabulacoes((prev) => {
+            const exists = prev.some((t) => t.id === row.id || t.protocolo === row.protocolo);
+            return exists ? prev : [row, ...prev];
+          });
+        } else if (event === 'UPDATE' && row) {
+          setTabulacoes((prev) =>
+            prev.map((t) => (t.id === row.id || t.protocolo === row.protocolo ? row : t))
+          );
+        } else if (event === 'DELETE' && oldId) {
+          setTabulacoes((prev) => prev.filter((t) => t.id !== oldId));
+        }
+      },
+      // Alunos realtime events
+      (event, row, oldId) => {
+        if (event === 'INSERT' && row) {
+          setAlunos((prev) => {
+            const exists = prev.some((a) => a.id === row.id || normalizeCpf(a.cpf) === normalizeCpf(row.cpf));
+            return exists ? prev : [row, ...prev];
+          });
+        } else if (event === 'UPDATE' && row) {
+          setAlunos((prev) =>
+            prev.map((a) => (a.id === row.id || normalizeCpf(a.cpf) === normalizeCpf(row.cpf) ? row : a))
+          );
+        } else if (event === 'DELETE' && oldId) {
+          setAlunos((prev) => prev.filter((a) => a.id !== oldId));
+        }
+      },
+      // Usuários realtime events
+      (event, row, oldId) => {
+        if (event === 'INSERT' && row) {
+          setUsuarios((prev) => {
+            const exists = prev.some((u) => u.id === row.id || u.usuario.toLowerCase() === row.usuario.toLowerCase());
+            return exists ? prev : [row, ...prev];
+          });
+        } else if (event === 'UPDATE' && row) {
+          setUsuarios((prev) =>
+            prev.map((u) => (u.id === row.id || u.usuario.toLowerCase() === row.usuario.toLowerCase() ? row : u))
+          );
+        } else if (event === 'DELETE' && oldId) {
+          setUsuarios((prev) => prev.filter((u) => u.id !== oldId));
+        }
+      }
+    );
 
     return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
+      dbSub.unsubscribe();
     };
   }, []);
 
@@ -340,7 +381,7 @@ export default function App() {
     }
 
     try {
-      // 1. Direct query in Supabase (handles leading zeros, mask, etc.)
+      // Direct query in Supabase (handles leading zeros, mask, variations) with zero-redundancy single-record query
       const directSearch = await searchAlunoByCpfSupabase(cpfToSearch);
       if (directSearch.data) {
         setAlunos((prev) => {
@@ -358,17 +399,8 @@ export default function App() {
         setSelectedAluno(directSearch.data);
         return;
       }
-
-      // 2. Fallback: fetch and refresh all students from Supabase
-      const cloudResult = await fetchAlunosSupabase();
-      if (cloudResult.data && cloudResult.data.length > 0) {
-        setAlunos(cloudResult.data);
-        const syncedFound = findAlunoByCpf(cloudResult.data);
-        setSelectedAluno(syncedFound || null);
-        return;
-      }
     } catch (err) {
-      console.warn('Falha ao recarregar alunos do Supabase na busca por CPF:', err);
+      console.warn('Falha na busca direta de aluno no Supabase por CPF:', err);
     }
 
     setSelectedAluno(null);
