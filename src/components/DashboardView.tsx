@@ -1,11 +1,28 @@
 import React, { useMemo, useState } from 'react';
-import { BarChart3, CalendarRange, Building2, Filter, Percent, TrendingUp, Users, Wallet, FileSpreadsheet } from 'lucide-react';
+import {
+  BarChart3,
+  CalendarRange,
+  Building2,
+  Filter,
+  Percent,
+  TrendingUp,
+  Users,
+  Wallet,
+  FileSpreadsheet,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+} from 'lucide-react';
 import { Tabulacao, Usuario } from '../types';
 
 interface DashboardViewProps {
   tabulacoes: Tabulacao[];
   usuarios: Usuario[];
 }
+
+type UnidadeSortField = 'unidade' | 'quantidadeAtendimentos' | 'quantidadeNegociacao' | 'quantidadeRecusas' | 'valorPrimeiraParcela';
+type OperadorSortField = 'operador' | 'supervisor' | 'quantidadeAtendimentos' | 'quantidadeNegociacao' | 'quantidadeRecusas' | 'valorPrimeiraParcela';
+type SortDirection = 'asc' | 'desc';
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', {
@@ -47,6 +64,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
   const [atendente, setAtendente] = useState('Todos');
   const [unidade, setUnidade] = useState('Todos');
   const [tipoAtendimento, setTipoAtendimento] = useState('Todos');
+
+  // Sorting state for "Resumo por unidade"
+  const [sortUnidadeField, setSortUnidadeField] = useState<UnidadeSortField>('quantidadeAtendimentos');
+  const [sortUnidadeDirection, setSortUnidadeDirection] = useState<SortDirection>('desc');
+
+  // Sorting state for "Resumo por operador"
+  const [sortOperadorField, setSortOperadorField] = useState<OperadorSortField>('quantidadeAtendimentos');
+  const [sortOperadorDirection, setSortOperadorDirection] = useState<SortDirection>('desc');
+
+  const handleSortUnidade = (field: UnidadeSortField) => {
+    if (sortUnidadeField === field) {
+      setSortUnidadeDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortUnidadeField(field);
+      setSortUnidadeDirection(field === 'unidade' ? 'asc' : 'desc');
+    }
+  };
+
+  const handleSortOperador = (field: OperadorSortField) => {
+    if (sortOperadorField === field) {
+      setSortOperadorDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortOperadorField(field);
+      setSortOperadorDirection(field === 'operador' || field === 'supervisor' ? 'asc' : 'desc');
+    }
+  };
 
   const supervisorOptions = useMemo(
     () =>
@@ -208,6 +251,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
     return Array.from(map.values()).sort((a, b) => b.quantidadeAtendimentos - a.quantidadeAtendimentos);
   }, [filteredTabulacoes, usuarios]);
 
+  // Sorted arrays based on user selection
+  const sortedTabelaPorUnidade = useMemo(() => {
+    return [...tabelaPorUnidade].sort((a, b) => {
+      let result = 0;
+      if (sortUnidadeField === 'unidade') {
+        result = a.unidade.localeCompare(b.unidade, 'pt-BR');
+      } else {
+        result = a[sortUnidadeField] - b[sortUnidadeField];
+      }
+      return sortUnidadeDirection === 'asc' ? result : -result;
+    });
+  }, [tabelaPorUnidade, sortUnidadeField, sortUnidadeDirection]);
+
+  const sortedTabelaPorOperador = useMemo(() => {
+    return [...tabelaPorOperador].sort((a, b) => {
+      let result = 0;
+      if (sortOperadorField === 'operador') {
+        result = a.operador.localeCompare(b.operador, 'pt-BR');
+      } else if (sortOperadorField === 'supervisor') {
+        result = a.supervisor.localeCompare(b.supervisor, 'pt-BR');
+      } else {
+        result = a[sortOperadorField] - b[sortOperadorField];
+      }
+      return sortOperadorDirection === 'asc' ? result : -result;
+    });
+  }, [tabelaPorOperador, sortOperadorField, sortOperadorDirection]);
+
   const canalStats = useMemo(() => {
     const map = new Map<string, number>();
     filteredTabulacoes.forEach((tab) => {
@@ -253,7 +323,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
   };
 
   const exportarResumoUnidade = () => {
-    if (tabelaPorUnidade.length === 0) return;
+    if (sortedTabelaPorUnidade.length === 0) return;
     const headers = [
       'Unidade',
       'Atendimentos',
@@ -261,7 +331,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
       'Recusas',
       'Valor 1ª parcela (R$)',
     ];
-    const rows = tabelaPorUnidade.map((linha) => [
+    const rows = sortedTabelaPorUnidade.map((linha) => [
       linha.unidade,
       linha.quantidadeAtendimentos,
       linha.quantidadeNegociacao,
@@ -276,7 +346,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
   };
 
   const exportarResumoOperador = () => {
-    if (tabelaPorOperador.length === 0) return;
+    if (sortedTabelaPorOperador.length === 0) return;
     const headers = [
       'Operador',
       'Supervisor',
@@ -285,7 +355,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
       'Recusas',
       'Valor 1ª parcela (R$)',
     ];
-    const rows = tabelaPorOperador.map((linha) => [
+    const rows = sortedTabelaPorOperador.map((linha) => [
       linha.operador,
       linha.supervisor,
       linha.quantidadeAtendimentos,
@@ -575,7 +645,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
           <button
             type="button"
             onClick={exportarResumoUnidade}
-            disabled={tabelaPorUnidade.length === 0}
+            disabled={sortedTabelaPorUnidade.length === 0}
             className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 disabled:opacity-40 disabled:cursor-not-allowed border border-emerald-200/90 rounded-xl transition-all shadow-2xs cursor-pointer"
             title="Exportar dados de unidades para planilha CSV"
           >
@@ -588,17 +658,102 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr>
-                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Unidade</th>
-                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Atendimentos</th>
-                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Negociação</th>
-                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Recusas</th>
-                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Valor 1ª parcela</th>
+                <th
+                  onClick={() => handleSortUnidade('unidade')}
+                  className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900 cursor-pointer select-none transition-colors group"
+                  title="Ordenar por Unidade (A-Z / Z-A)"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Unidade</span>
+                    {sortUnidadeField === 'unidade' ? (
+                      sortUnidadeDirection === 'asc' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-indigo-600" />
+                      ) : (
+                        <ArrowDown className="w-3.5 h-3.5 text-indigo-600" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-30 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSortUnidade('quantidadeAtendimentos')}
+                  className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900 cursor-pointer select-none transition-colors group"
+                  title="Ordenar por Atendimentos (Maior/Menor)"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Atendimentos</span>
+                    {sortUnidadeField === 'quantidadeAtendimentos' ? (
+                      sortUnidadeDirection === 'asc' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-indigo-600" />
+                      ) : (
+                        <ArrowDown className="w-3.5 h-3.5 text-indigo-600" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-30 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSortUnidade('quantidadeNegociacao')}
+                  className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900 cursor-pointer select-none transition-colors group"
+                  title="Ordenar por Negociação (Maior/Menor)"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Negociação</span>
+                    {sortUnidadeField === 'quantidadeNegociacao' ? (
+                      sortUnidadeDirection === 'asc' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-indigo-600" />
+                      ) : (
+                        <ArrowDown className="w-3.5 h-3.5 text-indigo-600" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-30 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSortUnidade('quantidadeRecusas')}
+                  className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900 cursor-pointer select-none transition-colors group"
+                  title="Ordenar por Recusas (Maior/Menor)"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Recusas</span>
+                    {sortUnidadeField === 'quantidadeRecusas' ? (
+                      sortUnidadeDirection === 'asc' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-indigo-600" />
+                      ) : (
+                        <ArrowDown className="w-3.5 h-3.5 text-indigo-600" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-30 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSortUnidade('valorPrimeiraParcela')}
+                  className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900 cursor-pointer select-none transition-colors group"
+                  title="Ordenar por Valor 1ª Parcela (Maior/Menor)"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Valor 1ª parcela</span>
+                    {sortUnidadeField === 'valorPrimeiraParcela' ? (
+                      sortUnidadeDirection === 'asc' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-indigo-600" />
+                      ) : (
+                        <ArrowDown className="w-3.5 h-3.5 text-indigo-600" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-30 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-200 bg-white">
-              {tabelaPorUnidade.length > 0 ? (
-                tabelaPorUnidade.map((linha) => (
+              {sortedTabelaPorUnidade.length > 0 ? (
+                sortedTabelaPorUnidade.map((linha) => (
                   <tr key={linha.unidade} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 text-sm font-semibold text-slate-800">{linha.unidade}</td>
                     <td className="px-4 py-3 text-sm text-slate-700">{linha.quantidadeAtendimentos}</td>
@@ -629,7 +784,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
           <button
             type="button"
             onClick={exportarResumoOperador}
-            disabled={tabelaPorOperador.length === 0}
+            disabled={sortedTabelaPorOperador.length === 0}
             className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 disabled:opacity-40 disabled:cursor-not-allowed border border-emerald-200/90 rounded-xl transition-all shadow-2xs cursor-pointer"
             title="Exportar dados de operadores para planilha CSV"
           >
@@ -642,18 +797,120 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr>
-                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Operador</th>
-                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Supervisor</th>
-                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Atendimentos</th>
-                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Negociação</th>
-                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Recusas</th>
-                <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600">Valor 1ª parcela</th>
+                <th
+                  onClick={() => handleSortOperador('operador')}
+                  className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900 cursor-pointer select-none transition-colors group"
+                  title="Ordenar por Operador (A-Z / Z-A)"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Operador</span>
+                    {sortOperadorField === 'operador' ? (
+                      sortOperadorDirection === 'asc' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-indigo-600" />
+                      ) : (
+                        <ArrowDown className="w-3.5 h-3.5 text-indigo-600" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-30 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSortOperador('supervisor')}
+                  className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900 cursor-pointer select-none transition-colors group"
+                  title="Ordenar por Supervisor (A-Z / Z-A)"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Supervisor</span>
+                    {sortOperadorField === 'supervisor' ? (
+                      sortOperadorDirection === 'asc' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-indigo-600" />
+                      ) : (
+                        <ArrowDown className="w-3.5 h-3.5 text-indigo-600" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-30 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSortOperador('quantidadeAtendimentos')}
+                  className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900 cursor-pointer select-none transition-colors group"
+                  title="Ordenar por Atendimentos (Maior/Menor)"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Atendimentos</span>
+                    {sortOperadorField === 'quantidadeAtendimentos' ? (
+                      sortOperadorDirection === 'asc' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-indigo-600" />
+                      ) : (
+                        <ArrowDown className="w-3.5 h-3.5 text-indigo-600" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-30 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSortOperador('quantidadeNegociacao')}
+                  className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900 cursor-pointer select-none transition-colors group"
+                  title="Ordenar por Negociação (Maior/Menor)"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Negociação</span>
+                    {sortOperadorField === 'quantidadeNegociacao' ? (
+                      sortOperadorDirection === 'asc' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-indigo-600" />
+                      ) : (
+                        <ArrowDown className="w-3.5 h-3.5 text-indigo-600" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-30 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSortOperador('quantidadeRecusas')}
+                  className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900 cursor-pointer select-none transition-colors group"
+                  title="Ordenar por Recusas (Maior/Menor)"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Recusas</span>
+                    {sortOperadorField === 'quantidadeRecusas' ? (
+                      sortOperadorDirection === 'asc' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-indigo-600" />
+                      ) : (
+                        <ArrowDown className="w-3.5 h-3.5 text-indigo-600" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-30 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSortOperador('valorPrimeiraParcela')}
+                  className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.12em] text-slate-600 hover:text-slate-900 cursor-pointer select-none transition-colors group"
+                  title="Ordenar por Valor 1ª Parcela (Maior/Menor)"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Valor 1ª parcela</span>
+                    {sortOperadorField === 'valorPrimeiraParcela' ? (
+                      sortOperadorDirection === 'asc' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-indigo-600" />
+                      ) : (
+                        <ArrowDown className="w-3.5 h-3.5 text-indigo-600" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-30 group-hover:opacity-100 transition-opacity" />
+                    )}
+                  </div>
+                </th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-200 bg-white">
-              {tabelaPorOperador.length > 0 ? (
-                tabelaPorOperador.map((linha) => (
+              {sortedTabelaPorOperador.length > 0 ? (
+                sortedTabelaPorOperador.map((linha) => (
                   <tr key={linha.operador} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 text-sm font-semibold text-slate-800">{linha.operador}</td>
                     <td className="px-4 py-3 text-sm text-slate-700">{linha.supervisor}</td>
