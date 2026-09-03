@@ -10,16 +10,17 @@ import {
   BadgeCheck,
   User as UserIcon,
   BarChart3,
-  BriefcaseBusiness
+  BriefcaseBusiness,
+  Users
 } from 'lucide-react';
 import { Usuario } from '../types';
 
 interface NavbarProps {
-  activeTab: 'tabulacao' | 'historico' | 'dashboard' | 'usuarios' | 'supabase';
-  setActiveTab: (tab: 'tabulacao' | 'historico' | 'dashboard' | 'usuarios' | 'supabase') => void;
+  activeTab: 'tabulacao' | 'historico' | 'dashboard' | 'base_atendimento' | 'usuarios' | 'supabase';
+  setActiveTab: (tab: 'tabulacao' | 'historico' | 'dashboard' | 'base_atendimento' | 'usuarios' | 'supabase') => void;
   currentUser: Usuario | null;
   onLogout: () => void;
-  totalTabulacoes: number;
+  totalTabulacoes?: number;
   totalUsuarios?: number;
 }
 
@@ -87,11 +88,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <FileSpreadsheet className="w-4 h-4" />
               {isOperador ? 'Meu Histórico' : 'Histórico & Relatórios'}
-              {totalTabulacoes > 0 && (
-                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-slate-700 text-[10px] text-slate-200">
-                  {totalTabulacoes}
-                </span>
-              )}
+            </button>
+
+            {/* Tab: Base de Atendimento (Campanha / WhatsApp) */}
+            <button
+              id="tab-btn-base-atendimento"
+              onClick={() => setActiveTab('base_atendimento')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'base_atendimento'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+              }`}
+            >
+              <Users className="w-4 h-4 text-emerald-400" />
+              <span>Base de Atendimento</span>
             </button>
 
             {/* Tab: Dashboard Operacional */}
@@ -241,6 +251,16 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <FileSpreadsheet className="w-4 h-4 mb-0.5" />
             Histórico
+          </button>
+
+          <button
+            onClick={() => setActiveTab('base_atendimento')}
+            className={`flex flex-col items-center py-1 px-2 text-[11px] font-medium rounded ${
+              activeTab === 'base_atendimento' ? 'text-indigo-400 font-bold' : 'text-slate-400'
+            }`}
+          >
+            <Users className="w-4 h-4 mb-0.5 text-emerald-400" />
+            Base
           </button>
 
           {isSupervisorOrAdm && (

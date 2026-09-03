@@ -24,7 +24,9 @@ import {
 import { 
   SUPABASE_SQL_SCHEMA, 
   SUPABASE_SQL_CLEANUP, 
-  SUPABASE_SQL_MIGRATION 
+  SUPABASE_SQL_MIGRATION,
+  SUPABASE_SQL_BASE_ATENDIMENTO,
+  SUPABASE_SQL_RESET
 } from '../data/mockData';
 import { 
   supabase, 
@@ -34,6 +36,7 @@ import {
   fetchAlunosSupabase,
   fetchTabulacoesSupabase,
   fetchUsuariosSupabase,
+  fetchBaseAtendimentoSupabase,
   saveAlunoSupabase,
   saveTabulacaoSupabase,
   saveUsuarioSupabase,
@@ -41,27 +44,31 @@ import {
   DEFAULT_SUPABASE_URL,
   DEFAULT_SUPABASE_KEY
 } from '../lib/supabase';
-import { Aluno, Tabulacao, Usuario } from '../types';
+import { Aluno, Tabulacao, Usuario, BaseAtendimentoItem } from '../types';
 
 interface SupabaseViewProps {
   alunos?: Aluno[];
   tabulacoes?: Tabulacao[];
   usuarios?: Usuario[];
-  onSyncFromSupabase?: (alunos: Aluno[], tabs: Tabulacao[], usrs: Usuario[]) => void;
+  baseAtendimento?: BaseAtendimentoItem[];
+  onSyncFromSupabase?: (alunos: Aluno[], tabs: Tabulacao[], usrs: Usuario[], base?: BaseAtendimentoItem[]) => void;
 }
 
 export const SupabaseView: React.FC<SupabaseViewProps> = ({
   alunos = [],
   tabulacoes = [],
   usuarios = [],
+  baseAtendimento = [],
   onSyncFromSupabase
 }) => {
   const [copiedSql, setCopiedSql] = useState(false);
   const [copiedCleanupSql, setCopiedCleanupSql] = useState(false);
   const [copiedMigrationSql, setCopiedMigrationSql] = useState(false);
+  const [copiedBaseAtendimentoSql, setCopiedBaseAtendimentoSql] = useState(false);
+  const [copiedResetSql, setCopiedResetSql] = useState(false);
   const [copiedClient, setCopiedClient] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<'status' | 'sql' | 'client' | 'config'>('status');
-  const [activeSqlScript, setActiveSqlScript] = useState<'schema' | 'cleanup' | 'migration'>('schema');
+  const [activeSqlScript, setActiveSqlScript] = useState<'schema' | 'migration' | 'base_atendimento' | 'cleanup' | 'reset'>('schema');
 
   const [creds, setCreds] = useState(getSupabaseCredentials());
   const [inputUrl, setInputUrl] = useState(creds.url);
@@ -113,6 +120,18 @@ export const SupabaseView: React.FC<SupabaseViewProps> = ({
     setTimeout(() => setCopiedMigrationSql(false), 2500);
   };
 
+  const handleCopyBaseAtendimentoSql = () => {
+    navigator.clipboard.writeText(SUPABASE_SQL_BASE_ATENDIMENTO);
+    setCopiedBaseAtendimentoSql(true);
+    setTimeout(() => setCopiedBaseAtendimentoSql(false), 2500);
+  };
+
+  const handleCopyResetSql = () => {
+    navigator.clipboard.writeText(SUPABASE_SQL_RESET);
+    setCopiedResetSql(true);
+    setTimeout(() => setCopiedResetSql(false), 2500);
+  };
+
   const handleSaveConfig = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputUrl.trim() || !inputKey.trim()) {
@@ -135,16 +154,24 @@ export const SupabaseView: React.FC<SupabaseViewProps> = ({
     setActionMessage({ type: 'info', text: 'Enviando dados locais para o banco de dados Supabase...' });
     
     try {
-      const result = await seedInitialDataToSupabase(alunos, tabulacoes, usuarios);
+      const result = await seedInitialDataToSupabase(alunos, tabulacoes, usuarios, baseAtendimento);
       if (result.errors.length > 0 && result.alunosCount === 0 && result.tabulacoesCount === 0 && result.usuariosCount === 0) {
         setActionMessage({
           type: 'error',
           text: `Erro ao enviar dados. Verifique se executou o script SQL no Supabase. Detalhe: ${result.errors[0]}`
         });
       } else {
+        const parts = [
+          `${result.alunosCount} alunos`,
+          `${result.tabulacoesCount} tabulações`,
+          `${result.usuariosCount} usuários`,
+        ];
+        if (result.baseAtendimentoCount > 0) {
+          parts.push(`${result.baseAtendimentoCount} contatos da base`);
+        }
         setActionMessage({
           type: 'success',
-          text: `Sincronização concluída! Enviados para o Supabase: ${result.alunosCount} alunos, ${result.tabulacoesCount} tabulações e ${result.usuariosCount} usuários.`
+          text: `Sincronização concluída! Enviados para o Supabase: ${parts.join(', ')}.`
         });
         runHealthCheck();
       }
@@ -160,10 +187,11 @@ export const SupabaseView: React.FC<SupabaseViewProps> = ({
     setActionMessage({ type: 'info', text: 'Carregando dados mais recentes do Supabase...' });
 
     try {
-      const [alunosRes, tabsRes, usrsRes] = await Promise.all([
+      const [alunosRes, tabsRes, usrsRes, baseRes] = await Promise.all([
         fetchAlunosSupabase(true),
         fetchTabulacoesSupabase(true),
         fetchUsuariosSupabase(true),
+        fetchBaseAtendimentoSupabase(true),
       ]);
 
       if (alunosRes.error || tabsRes.error || usrsRes.error) {
@@ -176,14 +204,24 @@ export const SupabaseView: React.FC<SupabaseViewProps> = ({
         const loadedAlunos = alunosRes.data || [];
         const loadedTabs = tabsRes.data || [];
         const loadedUsrs = usrsRes.data || [];
+        const loadedBase = baseRes.data || [];
 
         if (onSyncFromSupabase) {
-          onSyncFromSupabase(loadedAlunos, loadedTabs, loadedUsrs);
+          onSyncFromSupabase(loadedAlunos, loadedTabs, loadedUsrs, loadedBase);
+        }
+
+        const msgParts = [
+          `${loadedAlunos.length} alunos`,
+          `${loadedTabs.length} tabulações`,
+          `${loadedUsrs.length} usuários`,
+        ];
+        if (loadedBase.length > 0) {
+          msgParts.push(`${loadedBase.length} registros da base de atendimento`);
         }
 
         setActionMessage({
           type: 'success',
-          text: `Dados importados do Supabase com sucesso: ${loadedAlunos.length} alunos, ${loadedTabs.length} tabulações, ${loadedUsrs.length} usuários!`
+          text: `Dados importados do Supabase com sucesso: ${msgParts.join(', ')}!`
         });
         runHealthCheck();
       }
@@ -265,6 +303,41 @@ export async function autenticarUsuario(usuario: string, senha: string) {
   if (error) throw error;
   return data;
 }
+
+// 4. Salvar Contato na Base de Atendimento (Campanhas WhatsApp)
+export async function salvarItemBaseAtendimento(item: {
+  nome: string;
+  matricula: string;
+  whatsapp: string;
+  unidade?: string;
+  observacao?: string;
+}) {
+  const { data, error } = await supabase
+    .from('base_atendimento')
+    .upsert(item, { onConflict: 'matricula' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// 5. Importação em Lote de Base de Atendimento
+export async function importarLoteBaseAtendimento(items: Array<{
+  nome: string;
+  matricula: string;
+  whatsapp: string;
+  unidade?: string;
+  observacao?: string;
+}>) {
+  const { data, error } = await supabase
+    .from('base_atendimento')
+    .upsert(items, { onConflict: 'matricula' })
+    .select();
+
+  if (error) throw error;
+  return data;
+}
 `;
 
   return (
@@ -297,7 +370,7 @@ export async function autenticarUsuario(usuario: string, senha: string) {
                 Central de Integração Supabase
               </h2>
               <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-                Banco de dados PostgreSQL corporativo integrado para persistência de <strong>Alunos</strong>, <strong>Tabulações de Atendimento</strong> e <strong>Gestão de Usuários</strong>.
+                Banco de dados PostgreSQL corporativo integrado para persistência de <strong>Alunos</strong>, <strong>Tabulações de Atendimento</strong>, <strong>Gestão de Usuários</strong> e <strong>Base de Atendimento</strong>.
               </p>
             </div>
           </div>
@@ -325,7 +398,7 @@ export async function autenticarUsuario(usuario: string, senha: string) {
         </div>
 
         {/* Real-time Status Strip */}
-        <div className="mt-6 pt-6 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+        <div className="mt-6 pt-6 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
           
           <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
             <div>
@@ -373,6 +446,17 @@ export async function autenticarUsuario(usuario: string, senha: string) {
               </span>
             </div>
             <span className="text-xs text-slate-300 font-bold">{usuarios.length} locais</span>
+          </div>
+
+          <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Base Atendimento</span>
+              <span className={`font-bold flex items-center gap-1 mt-0.5 ${health?.tables.base_atendimento ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {health?.tables.base_atendimento ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                {health?.tables.base_atendimento ? 'Pronta no Supabase' : 'Aguardando Script SQL'}
+              </span>
+            </div>
+            <span className="text-xs text-slate-300 font-bold">{baseAtendimento.length} locais</span>
           </div>
 
         </div>
@@ -485,7 +569,7 @@ export async function autenticarUsuario(usuario: string, senha: string) {
                     Exportar para o Supabase
                   </h4>
                   <p className="text-[11px] text-slate-500 leading-snug">
-                    Salva todos os {alunos.length} alunos, {tabulacoes.length} tabulações e {usuarios.length} usuários diretamente no banco Supabase.
+                    Salva todos os {alunos.length} alunos, {tabulacoes.length} tabulações, {usuarios.length} usuários e {baseAtendimento.length} registros da base diretamente no banco Supabase.
                   </p>
                 </div>
 
@@ -622,17 +706,6 @@ export async function autenticarUsuario(usuario: string, senha: string) {
               </button>
 
               <button
-                onClick={() => setActiveSqlScript('cleanup')}
-                className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                  activeSqlScript === 'cleanup'
-                    ? 'bg-rose-600 text-white shadow-md shadow-rose-950'
-                    : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                2. Limpar Colunas Antigas (DROP)
-              </button>
-
-              <button
                 onClick={() => setActiveSqlScript('migration')}
                 className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                   activeSqlScript === 'migration'
@@ -640,7 +713,40 @@ export async function autenticarUsuario(usuario: string, senha: string) {
                     : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
               >
-                3. Migração Rápida (Novas Colunas)
+                2. Migração Rápida (Novas Colunas)
+              </button>
+
+              <button
+                onClick={() => setActiveSqlScript('base_atendimento')}
+                className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  activeSqlScript === 'base_atendimento'
+                    ? 'bg-amber-600 text-white shadow-md shadow-amber-950'
+                    : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                3. Tabela Base de Atendimento (Nova)
+              </button>
+
+              <button
+                onClick={() => setActiveSqlScript('cleanup')}
+                className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  activeSqlScript === 'cleanup'
+                    ? 'bg-rose-600 text-white shadow-md shadow-rose-950'
+                    : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                4. Limpar Colunas Antigas (DROP)
+              </button>
+
+              <button
+                onClick={() => setActiveSqlScript('reset')}
+                className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  activeSqlScript === 'reset'
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-950'
+                    : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                5. Reset / Recriação Completa (DROP & RECREATE)
               </button>
             </div>
 
@@ -655,6 +761,26 @@ export async function autenticarUsuario(usuario: string, senha: string) {
               </button>
             )}
 
+            {activeSqlScript === 'migration' && (
+              <button
+                onClick={handleCopyMigrationSql}
+                className="text-xs font-bold text-white flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 px-4 py-2.5 rounded-xl transition-all cursor-pointer shadow-lg shadow-indigo-950/50"
+              >
+                {copiedMigrationSql ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4" />}
+                {copiedMigrationSql ? 'Script Copiado!' : 'Copiar Script de Migração'}
+              </button>
+            )}
+
+            {activeSqlScript === 'base_atendimento' && (
+              <button
+                onClick={handleCopyBaseAtendimentoSql}
+                className="text-xs font-bold text-white flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 px-4 py-2.5 rounded-xl transition-all cursor-pointer shadow-lg shadow-amber-950/50"
+              >
+                {copiedBaseAtendimentoSql ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4" />}
+                {copiedBaseAtendimentoSql ? 'Script Copiado!' : 'Copiar Script Base Atendimento'}
+              </button>
+            )}
+
             {activeSqlScript === 'cleanup' && (
               <button
                 onClick={handleCopyCleanupSql}
@@ -665,13 +791,13 @@ export async function autenticarUsuario(usuario: string, senha: string) {
               </button>
             )}
 
-            {activeSqlScript === 'migration' && (
+            {activeSqlScript === 'reset' && (
               <button
-                onClick={handleCopyMigrationSql}
-                className="text-xs font-bold text-white flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 px-4 py-2.5 rounded-xl transition-all cursor-pointer shadow-lg shadow-indigo-950/50"
+                onClick={handleCopyResetSql}
+                className="text-xs font-bold text-white flex items-center gap-1.5 bg-purple-600 hover:bg-purple-500 px-4 py-2.5 rounded-xl transition-all cursor-pointer shadow-lg shadow-purple-950/50"
               >
-                {copiedMigrationSql ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4" />}
-                {copiedMigrationSql ? 'Script Copiado!' : 'Copiar Script de Migração'}
+                {copiedResetSql ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4" />}
+                {copiedResetSql ? 'Script Copiado!' : 'Copiar Script de Reset Total'}
               </button>
             )}
           </div>
@@ -682,7 +808,25 @@ export async function autenticarUsuario(usuario: string, senha: string) {
               <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl text-xs text-slate-300 flex items-start gap-2.5">
                 <Server className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-emerald-400">Script Completo (DDL + RLS + Índices + Seeds):</strong> Cria e estrutura as tabelas <code className="text-emerald-300">usuarios</code>, <code className="text-emerald-300">alunos</code> e <code className="text-emerald-300">tabulacoes</code> com todas as colunas oficiais atuais e dados iniciais.
+                  <strong className="text-emerald-400">Script Completo (DDL + RLS + Índices + Seeds):</strong> Cria e estrutura as tabelas <code className="text-emerald-300">usuarios</code>, <code className="text-emerald-300">alunos</code>, <code className="text-emerald-300">tabulacoes</code> e <code className="text-emerald-300">base_atendimento</code> com todas as colunas oficiais atuais, RLS e dados iniciais.
+                </div>
+              </div>
+            )}
+
+            {activeSqlScript === 'migration' && (
+              <div className="p-3.5 bg-indigo-950/40 border border-indigo-900/60 rounded-xl text-xs text-indigo-200 flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-indigo-300">Migração Rápida (Adicionar Colunas):</strong> Adiciona de forma segura e idempotente as novas colunas (<code className="text-indigo-200 font-mono">com_renovacao</code>, <code className="text-indigo-200 font-mono">unidade</code>, <code className="text-indigo-200 font-mono">assessoria_atendimento</code>, etc.) caso você já tenha a tabela existente no Supabase.
+                </div>
+              </div>
+            )}
+
+            {activeSqlScript === 'base_atendimento' && (
+              <div className="p-3.5 bg-amber-950/40 border border-amber-900/60 rounded-xl text-xs text-amber-200 flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-amber-300">Tabela da Base de Atendimento (Campanhas WhatsApp):</strong> Cria a tabela <code className="text-amber-200 font-mono">base_atendimento</code> no Supabase com RLS, índices otimizados e realtime ativado para cruzamento automático de contatos com a tabela <code className="text-amber-200 font-mono">tabulacoes</code>.
                 </div>
               </div>
             )}
@@ -696,11 +840,11 @@ export async function autenticarUsuario(usuario: string, senha: string) {
               </div>
             )}
 
-            {activeSqlScript === 'migration' && (
-              <div className="p-3.5 bg-indigo-950/40 border border-indigo-900/60 rounded-xl text-xs text-indigo-200 flex items-start gap-2.5">
-                <Sparkles className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+            {activeSqlScript === 'reset' && (
+              <div className="p-3.5 bg-purple-950/40 border border-purple-900/60 rounded-xl text-xs text-purple-200 flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-indigo-300">Migração Rápida (Adicionar Colunas):</strong> Adiciona de forma segura e idempotente as novas colunas (<code className="text-indigo-200 font-mono">com_renovacao</code>, <code className="text-indigo-200 font-mono">unidade</code>, <code className="text-indigo-200 font-mono">assessoria_atendimento</code>, etc.) caso você já tenha a tabela existente no Supabase.
+                  <strong className="text-purple-300">Redefinição Total (DROP CASCADE & RECREATE):</strong> Recria todas as 4 tabelas (<code className="text-purple-200 font-mono">base_atendimento</code>, <code className="text-purple-200 font-mono">tabulacoes</code>, <code className="text-purple-200 font-mono">alunos</code>, <code className="text-purple-200 font-mono">usuarios</code>) do zero com a estrutura mais recente, triggers de auditoria, políticas RLS permissivas e sementes iniciais.
                 </div>
               </div>
             )}
@@ -710,8 +854,10 @@ export async function autenticarUsuario(usuario: string, senha: string) {
           <div className="px-6 pb-6">
             <pre className="p-6 text-xs font-mono overflow-x-auto text-emerald-300/90 leading-relaxed max-h-[600px] bg-slate-950/90 rounded-2xl border border-slate-800/80">
               {activeSqlScript === 'schema' && SUPABASE_SQL_SCHEMA}
-              {activeSqlScript === 'cleanup' && SUPABASE_SQL_CLEANUP}
               {activeSqlScript === 'migration' && SUPABASE_SQL_MIGRATION}
+              {activeSqlScript === 'base_atendimento' && SUPABASE_SQL_BASE_ATENDIMENTO}
+              {activeSqlScript === 'cleanup' && SUPABASE_SQL_CLEANUP}
+              {activeSqlScript === 'reset' && SUPABASE_SQL_RESET}
             </pre>
           </div>
         </div>

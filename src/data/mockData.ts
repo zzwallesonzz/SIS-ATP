@@ -1,4 +1,4 @@
-import { Aluno, CategoriaMotivoItem, Tabulacao, Usuario } from '../types';
+import { Aluno, BaseAtendimentoItem, CategoriaMotivoItem, Tabulacao, Usuario } from '../types';
 
 export const UNIDADES_LISTA = [
 'FORTALEZA - CE',
@@ -421,9 +421,135 @@ export const INITIAL_USUARIOS: Usuario[] = [
   }
 ];
 
+export const INITIAL_BASE_ATENDIMENTO: BaseAtendimentoItem[] = [
+  {
+    id: 'base-01',
+    nome: 'Ana Clara da Silva',
+    matricula: 'RA20240188',
+    unidade: 'FORTALEZA - CE',
+    whatsapp: '(11) 98765-4321',
+    observacao: 'Tentativa de acordo pendente',
+    createdAt: '2026-08-10T09:00:00Z',
+  },
+  {
+    id: 'base-02',
+    nome: 'Lucas Oliveira Ferreira',
+    matricula: 'RA20230512',
+    unidade: 'TOM JOBIM - RJ',
+    whatsapp: '(21) 99123-8877',
+    observacao: 'Negociação recente em andamento',
+    createdAt: '2026-08-15T10:30:00Z',
+  },
+  {
+    id: 'base-03',
+    nome: 'Beatriz Santos Souza',
+    matricula: 'RA20220944',
+    unidade: 'SALVADOR - BA',
+    whatsapp: '(31) 98456-1122',
+    observacao: 'Aguardando confirmação de parcela',
+    createdAt: '2026-08-18T11:15:00Z',
+  },
+  {
+    id: 'base-04',
+    nome: 'Carlos Eduardo Mendes',
+    matricula: 'RA20250031',
+    unidade: 'BELEM - PA',
+    whatsapp: '(41) 97111-3344',
+    observacao: 'Alega dificuldades financeiras',
+    createdAt: '2026-08-20T14:00:00Z',
+  },
+  {
+    id: 'base-05',
+    nome: 'Mariana Costa Lima',
+    matricula: 'RA20230899',
+    unidade: 'NITEROI - RJ',
+    whatsapp: '(21) 98822-4455',
+    observacao: 'Sem histórico de contato recente',
+    createdAt: '2026-08-22T16:00:00Z',
+  },
+  {
+    id: 'base-06',
+    nome: 'Rodrigo Albuquerque Dias',
+    matricula: 'RA20241055',
+    unidade: 'MANAUS - AM',
+    whatsapp: '(92) 99344-7711',
+    observacao: 'Fila de acionamento inicial',
+    createdAt: '2026-08-25T08:45:00Z',
+  },
+  {
+    id: 'base-07',
+    nome: 'Fernanda Martins Ribeiro',
+    matricula: 'RA20210773',
+    unidade: 'TAGUATINGA - DF',
+    whatsapp: '(61) 98112-9900',
+    observacao: 'Interesse em renegociação via PIX',
+    createdAt: '2026-08-28T13:20:00Z',
+  }
+];
+
+export const SUPABASE_SQL_BASE_ATENDIMENTO = `-- ==============================================================================
+-- SCRIPT EXCLUSIVO: TABELA BASE DE ATENDIMENTO (Campanhas WhatsApp)
+-- Execute no SQL Editor do Supabase se precisar criar ou atualizar apenas esta tabela
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS public.base_atendimento (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome VARCHAR(255) NOT NULL,
+  matricula VARCHAR(50) NOT NULL,
+  unidade VARCHAR(100),
+  whatsapp VARCHAR(50) NOT NULL,
+  observacao TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Adições idempotentes para colunas que possam faltar em tabelas pré-existentes
+ALTER TABLE public.base_atendimento ADD COLUMN IF NOT EXISTS observacao TEXT;
+ALTER TABLE public.base_atendimento ADD COLUMN IF NOT EXISTS unidade VARCHAR(100);
+ALTER TABLE public.base_atendimento ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+-- Garantir constraint de matrícula única para permitir upsert inteligente
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'base_atendimento_matricula_key'
+  ) THEN
+    BEGIN
+      ALTER TABLE public.base_atendimento ADD CONSTRAINT base_atendimento_matricula_key UNIQUE (matricula);
+    EXCEPTION WHEN duplicate_table OR duplicate_object THEN
+      NULL;
+    END;
+  END IF;
+END $$;
+
+-- Índices de consulta rápida
+CREATE INDEX IF NOT EXISTS idx_base_atendimento_matricula ON public.base_atendimento(matricula);
+CREATE INDEX IF NOT EXISTS idx_base_atendimento_unidade ON public.base_atendimento(unidade);
+CREATE INDEX IF NOT EXISTS idx_base_atendimento_nome ON public.base_atendimento(nome);
+
+-- Políticas de Segurança (Row Level Security - RLS)
+ALTER TABLE public.base_atendimento ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir acesso total para base_atendimento" ON public.base_atendimento;
+CREATE POLICY "Permitir acesso total para base_atendimento" 
+ON public.base_atendimento 
+FOR ALL 
+USING (true) 
+WITH CHECK (true);
+
+-- Habilitar Realtime para a base de atendimento
+DO $$
+BEGIN
+  BEGIN 
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.base_atendimento; 
+  EXCEPTION WHEN duplicate_object THEN 
+    NULL; 
+  END;
+END $$;
+`;
+
 export const SUPABASE_SQL_CLEANUP = `-- ==============================================================================
--- SCRIPT DE LIMPEZA GERAL: REMOVER COLUNAS OBSOLETAS DAS TABELAS
--- (Execute no SQL Editor do Supabase para manter o banco limpo e enxuto)
+-- SCRIPT DE LIMPEZA GERAL: REMOVER COLUNAS OBSOLETAS DAS TABELAS (DROP)
+-- (Execute no SQL Editor do Supabase para remover colunas legadas e manter o banco enxuto)
 -- ==============================================================================
 
 -- 1. LIMPEZA NA TABELA DE ALUNOS (Remover campos desnecessários / não utilizados)
@@ -436,11 +562,7 @@ ALTER TABLE public.alunos
   DROP COLUMN IF EXISTS bairro,
   DROP COLUMN IF EXISTS cidade,
   DROP COLUMN IF EXISTS uf,
-  DROP COLUMN IF EXISTS cep,
-  DROP COLUMN IF EXISTS ra,
-  DROP COLUMN IF EXISTS curso,
-  DROP COLUMN IF EXISTS polo,
-  DROP COLUMN IF EXISTS status_academico;
+  DROP COLUMN IF EXISTS cep;
 
 -- 2. LIMPEZA NA TABELA DE TABULAÇÕES (Remover colunas descontinuadas)
 ALTER TABLE public.tabulacoes 
@@ -454,8 +576,8 @@ ALTER TABLE public.tabulacoes
 `;
 
 export const SUPABASE_SQL_MIGRATION = `-- ==============================================================================
--- SCRIPT DE MIGRAÇÃO RÁPIDA: ADICIONAR NOVAS COLUNAS E AJUSTAR FUSO HORÁRIO
--- (Use se você já possui a tabela e só precisa adicionar os novos campos)
+-- SCRIPT DE MIGRAÇÃO & ATUALIZAÇÃO (Para Bancos Supabase já Existentes)
+-- Executa com segurança sem apagar nenhum dado existente nas suas tabelas
 -- ==============================================================================
 
 -- 1. Configurar o Fuso Horário Padrão do PostgreSQL para São Paulo (UTC-3)
@@ -465,17 +587,80 @@ ALTER ROLE anon SET timezone TO 'America/Sao_Paulo';
 ALTER ROLE authenticated SET timezone TO 'America/Sao_Paulo';
 ALTER ROLE service_role SET timezone TO 'America/Sao_Paulo';
 
--- 2. Adicionar novas colunas se não existirem
+-- 2. Atualizar Tabela de Tabulações com Novas Colunas
 ALTER TABLE public.tabulacoes ADD COLUMN IF NOT EXISTS com_renovacao BOOLEAN DEFAULT false;
 ALTER TABLE public.tabulacoes ADD COLUMN IF NOT EXISTS unidade VARCHAR(100);
 ALTER TABLE public.tabulacoes ADD COLUMN IF NOT EXISTS assessoria_atendimento VARCHAR(100);
 ALTER TABLE public.tabulacoes ADD COLUMN IF NOT EXISTS status_aluno VARCHAR(50);
 ALTER TABLE public.tabulacoes ADD COLUMN IF NOT EXISTS aluno_email VARCHAR(255);
 ALTER TABLE public.tabulacoes ADD COLUMN IF NOT EXISTS aluno_telefone VARCHAR(50);
+
+CREATE INDEX IF NOT EXISTS idx_tabulacoes_unidade ON public.tabulacoes(unidade);
+CREATE INDEX IF NOT EXISTS idx_tabulacoes_tipo_negociacao ON public.tabulacoes(tipo_negociacao);
+
+-- 3. Criar ou Atualizar Tabela de Base de Atendimento (Campanhas WhatsApp)
+CREATE TABLE IF NOT EXISTS public.base_atendimento (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome VARCHAR(255) NOT NULL,
+  matricula VARCHAR(50) NOT NULL,
+  unidade VARCHAR(100),
+  whatsapp VARCHAR(50) NOT NULL,
+  observacao TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.base_atendimento ADD COLUMN IF NOT EXISTS observacao TEXT;
+ALTER TABLE public.base_atendimento ADD COLUMN IF NOT EXISTS unidade VARCHAR(100);
+ALTER TABLE public.base_atendimento ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'base_atendimento_matricula_key'
+  ) THEN
+    BEGIN
+      ALTER TABLE public.base_atendimento ADD CONSTRAINT base_atendimento_matricula_key UNIQUE (matricula);
+    EXCEPTION WHEN duplicate_table OR duplicate_object THEN
+      NULL;
+    END;
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_base_atendimento_matricula ON public.base_atendimento(matricula);
+CREATE INDEX IF NOT EXISTS idx_base_atendimento_unidade ON public.base_atendimento(unidade);
+CREATE INDEX IF NOT EXISTS idx_base_atendimento_nome ON public.base_atendimento(nome);
+
+-- 4. Revalidar Políticas RLS de Acesso Total
+ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir leitura e escrita de usuários" ON public.usuarios;
+CREATE POLICY "Permitir leitura e escrita de usuários" ON public.usuarios FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.alunos ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir acesso total para alunos" ON public.alunos;
+CREATE POLICY "Permitir acesso total para alunos" ON public.alunos FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.tabulacoes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir acesso total para tabulacoes" ON public.tabulacoes;
+CREATE POLICY "Permitir acesso total para tabulacoes" ON public.tabulacoes FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.base_atendimento ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir acesso total para base_atendimento" ON public.base_atendimento;
+CREATE POLICY "Permitir acesso total para base_atendimento" ON public.base_atendimento FOR ALL USING (true) WITH CHECK (true);
+
+-- 5. Habilitar Realtime em Todas as 4 Tabelas
+DO $$
+BEGIN
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.usuarios; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.alunos; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.tabulacoes; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.base_atendimento; EXCEPTION WHEN duplicate_object THEN NULL; END;
+END $$;
 `;
 
 export const SUPABASE_SQL_SCHEMA = `-- ==============================================================================
--- SISTEMA SIS ATP - SCHEMA SUPABASE COMPLETO (PostgreSQL DDL + RLS + Índices)
+-- SISTEMA SIS ATP - SCHEMA SUPABASE COMPLETO (PostgreSQL DDL + RLS + Índices + Realtime + Seeds)
+-- Execute no SQL Editor do Supabase para configurar todo o banco de uma só vez
 -- ==============================================================================
 
 -- 1. Configurar Fuso Horário de Brasília/São Paulo no PostgreSQL (UTC-3)
@@ -604,7 +789,7 @@ CREATE TABLE IF NOT EXISTS public.tabulacoes (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Migrações e Adições Idempotentes para Bancos já existentes
+-- Adições idempotentes para tabelas de tabulações já existentes
 ALTER TABLE public.tabulacoes ADD COLUMN IF NOT EXISTS com_renovacao BOOLEAN DEFAULT false;
 ALTER TABLE public.tabulacoes ADD COLUMN IF NOT EXISTS unidade VARCHAR(100);
 ALTER TABLE public.tabulacoes ADD COLUMN IF NOT EXISTS assessoria_atendimento VARCHAR(100);
@@ -618,6 +803,7 @@ CREATE INDEX IF NOT EXISTS idx_tabulacoes_cpf ON public.tabulacoes(aluno_cpf);
 CREATE INDEX IF NOT EXISTS idx_tabulacoes_matricula_atendente ON public.tabulacoes(matricula_atendente);
 CREATE INDEX IF NOT EXISTS idx_tabulacoes_data_hora ON public.tabulacoes(data_hora DESC);
 CREATE INDEX IF NOT EXISTS idx_tabulacoes_tipo_negociacao ON public.tabulacoes(tipo_negociacao);
+CREATE INDEX IF NOT EXISTS idx_tabulacoes_unidade ON public.tabulacoes(unidade);
 
 -- Políticas de Segurança (RLS) para Tabulações
 ALTER TABLE public.tabulacoes ENABLE ROW LEVEL SECURITY;
@@ -627,4 +813,204 @@ ON public.tabulacoes
 FOR ALL 
 USING (true) 
 WITH CHECK (true);
+
+-- ==============================================================================
+-- 5. TABELA DE BASE DE ATENDIMENTO (Campanha / Acionamento com WhatsApp)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.base_atendimento (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome VARCHAR(255) NOT NULL,
+  matricula VARCHAR(50) NOT NULL,
+  unidade VARCHAR(100),
+  whatsapp VARCHAR(50) NOT NULL,
+  observacao TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Adições idempotentes para tabelas de base_atendimento já existentes
+ALTER TABLE public.base_atendimento ADD COLUMN IF NOT EXISTS observacao TEXT;
+ALTER TABLE public.base_atendimento ADD COLUMN IF NOT EXISTS unidade VARCHAR(100);
+ALTER TABLE public.base_atendimento ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+-- Garantir constraint de matrícula única para upsert
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'base_atendimento_matricula_key'
+  ) THEN
+    BEGIN
+      ALTER TABLE public.base_atendimento ADD CONSTRAINT base_atendimento_matricula_key UNIQUE (matricula);
+    EXCEPTION WHEN duplicate_table OR duplicate_object THEN
+      NULL;
+    END;
+  END IF;
+END $$;
+
+-- Índices de consulta rápida
+CREATE INDEX IF NOT EXISTS idx_base_atendimento_matricula ON public.base_atendimento(matricula);
+CREATE INDEX IF NOT EXISTS idx_base_atendimento_unidade ON public.base_atendimento(unidade);
+CREATE INDEX IF NOT EXISTS idx_base_atendimento_nome ON public.base_atendimento(nome);
+
+-- Políticas de Segurança (Row Level Security - RLS) para Base de Atendimento
+ALTER TABLE public.base_atendimento ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir acesso total para base_atendimento" ON public.base_atendimento;
+CREATE POLICY "Permitir acesso total para base_atendimento" 
+ON public.base_atendimento 
+FOR ALL 
+USING (true) 
+WITH CHECK (true);
+
+-- ==============================================================================
+-- 6. HABILITAR REALTIME (Sincronização em tempo real entre operadores)
+-- ==============================================================================
+DO $$
+BEGIN
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.usuarios; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.alunos; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.tabulacoes; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.base_atendimento; EXCEPTION WHEN duplicate_object THEN NULL; END;
+END $$;
+`;
+
+export const SUPABASE_SQL_RESET = `-- ==============================================================================
+-- SCRIPT DE REDEFINIÇÃO TOTAL (DROP & RECREATE - AMBIENTE DE TESTES / REINÍCIO)
+-- ATENÇÃO: Este script apagará todas as tabelas e dados existentes no Supabase!
+-- Use apenas se você quiser recriar toda a estrutura do zero com dados limpos.
+-- ==============================================================================
+
+-- 1. Remover tabelas existentes com cascade
+DROP TABLE IF EXISTS public.base_atendimento CASCADE;
+DROP TABLE IF EXISTS public.tabulacoes CASCADE;
+DROP TABLE IF EXISTS public.alunos CASCADE;
+DROP TABLE IF EXISTS public.usuarios CASCADE;
+
+-- 2. Configurar Fuso Horário
+ALTER DATABASE postgres SET timezone TO 'America/Sao_Paulo';
+ALTER ROLE postgres SET timezone TO 'America/Sao_Paulo';
+ALTER ROLE anon SET timezone TO 'America/Sao_Paulo';
+ALTER ROLE authenticated SET timezone TO 'America/Sao_Paulo';
+ALTER ROLE service_role SET timezone TO 'America/Sao_Paulo';
+
+-- 3. Habilitar pgcrypto
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- 4. Criar Tabela de Usuários
+CREATE TABLE public.usuarios (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome VARCHAR(255) NOT NULL,
+  usuario VARCHAR(100) UNIQUE NOT NULL,
+  senha VARCHAR(255) NOT NULL,
+  perfil VARCHAR(50) NOT NULL CHECK (perfil IN ('Operador', 'Supervisor', 'Gerencial', 'ADM')),
+  supervisor VARCHAR(255),
+  matricula VARCHAR(50),
+  email_corporativo VARCHAR(255),
+  ativo BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_usuarios_login ON public.usuarios(usuario);
+CREATE INDEX idx_usuarios_perfil ON public.usuarios(perfil);
+ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Permitir leitura e escrita de usuários" ON public.usuarios FOR ALL USING (true) WITH CHECK (true);
+
+-- Inserir Usuários Iniciais Padrão
+INSERT INTO public.usuarios (nome, usuario, senha, perfil, supervisor, matricula, email_corporativo, ativo)
+VALUES 
+  ('Carlos Santos Andrade', 'carlos.santos', '123456', 'Supervisor', NULL, 'SUP-014', 'carlos.santos@intervalor.com.br', true),
+  ('Juliana Rocha Silva', 'juliana.rocha', '123456', 'Supervisor', NULL, 'SUP-022', 'juliana.rocha@intervalor.com.br', true),
+  ('Gerência Operacional', 'gerencia.operacional', '123456', 'Gerencial', NULL, 'GER-001', 'gerencia@intervalor.com.br', true),
+  ('Administrador do Sistema', 'admin', '123456', 'ADM', NULL, 'ADM-001', 'admin@intervalor.com.br', true),
+  ('Wellington Barbosa', 'wsbarbosa', '123456', 'Operador', 'Carlos Santos Andrade', 'OP-8821', 'wsbarbosa@intervalor.com.br', true),
+  ('Beatriz Lima Ferreira', 'beatriz.lima', '123456', 'Operador', 'Juliana Rocha Silva', 'OP-7740', 'beatriz.lima@intervalor.com.br', true);
+
+-- 5. Criar Tabela de Alunos
+CREATE TABLE public.alunos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  cpf VARCHAR(14) UNIQUE NOT NULL,
+  nome VARCHAR(255) NOT NULL,
+  matricula VARCHAR(50) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  telefone VARCHAR(50) NOT NULL,
+  ra VARCHAR(50),
+  curso VARCHAR(255),
+  polo VARCHAR(255),
+  status_academico VARCHAR(50) DEFAULT 'ATIVO',
+  data_cadastro TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_alunos_cpf ON public.alunos(cpf);
+CREATE INDEX idx_alunos_matricula ON public.alunos(matricula);
+CREATE INDEX idx_alunos_nome ON public.alunos(nome);
+ALTER TABLE public.alunos ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Permitir acesso total para alunos" ON public.alunos FOR ALL USING (true) WITH CHECK (true);
+
+-- 6. Criar Tabela de Tabulações
+CREATE TABLE public.tabulacoes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  protocolo VARCHAR(50) UNIQUE NOT NULL,
+  aluno_id UUID REFERENCES public.alunos(id) ON DELETE SET NULL,
+  aluno_cpf VARCHAR(14) NOT NULL,
+  aluno_nome VARCHAR(255) NOT NULL,
+  aluno_ra VARCHAR(50),
+  aluno_curso VARCHAR(255),
+  aluno_polo VARCHAR(255),
+  aluno_email VARCHAR(255),
+  aluno_telefone VARCHAR(50),
+  unidade VARCHAR(100),
+  assessoria_atendimento VARCHAR(100),
+  status_aluno VARCHAR(50),
+  data_hora TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  atendente_nome VARCHAR(255) NOT NULL,
+  matricula_atendente VARCHAR(50) NOT NULL,
+  canal_atendimento VARCHAR(50) NOT NULL,
+  categoria_motivo VARCHAR(100) NOT NULL,
+  submotivo VARCHAR(100) NOT NULL,
+  tipo_negociacao VARCHAR(100),
+  com_renovacao BOOLEAN DEFAULT false,
+  quantidade_parcelas INTEGER,
+  data_primeira_parcela DATE,
+  valor_entrada NUMERIC(12, 2),
+  valor_parcela NUMERIC(12, 2),
+  valor_total_acordo NUMERIC(12, 2),
+  tempo_atendimento_minutos INTEGER DEFAULT 0,
+  detalhamento TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_tabulacoes_protocolo ON public.tabulacoes(protocolo);
+CREATE INDEX idx_tabulacoes_cpf ON public.tabulacoes(aluno_cpf);
+CREATE INDEX idx_tabulacoes_matricula_atendente ON public.tabulacoes(matricula_atendente);
+CREATE INDEX idx_tabulacoes_data_hora ON public.tabulacoes(data_hora DESC);
+CREATE INDEX idx_tabulacoes_tipo_negociacao ON public.tabulacoes(tipo_negociacao);
+CREATE INDEX idx_tabulacoes_unidade ON public.tabulacoes(unidade);
+ALTER TABLE public.tabulacoes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Permitir acesso total para tabulacoes" ON public.tabulacoes FOR ALL USING (true) WITH CHECK (true);
+
+-- 7. Criar Tabela de Base de Atendimento
+CREATE TABLE public.base_atendimento (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome VARCHAR(255) NOT NULL,
+  matricula VARCHAR(50) UNIQUE NOT NULL,
+  unidade VARCHAR(100),
+  whatsapp VARCHAR(50) NOT NULL,
+  observacao TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_base_atendimento_matricula ON public.base_atendimento(matricula);
+CREATE INDEX idx_base_atendimento_unidade ON public.base_atendimento(unidade);
+CREATE INDEX idx_base_atendimento_nome ON public.base_atendimento(nome);
+ALTER TABLE public.base_atendimento ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Permitir acesso total para base_atendimento" ON public.base_atendimento FOR ALL USING (true) WITH CHECK (true);
+
+-- 8. Ativar Realtime em todas as tabelas
+DO $$
+BEGIN
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.usuarios; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.alunos; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.tabulacoes; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.base_atendimento; EXCEPTION WHEN duplicate_object THEN NULL; END;
+END $$;
 `;

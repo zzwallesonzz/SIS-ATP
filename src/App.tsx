@@ -11,8 +11,9 @@ import { SupabaseView } from './components/SupabaseModal';
 import { DashboardView } from './components/DashboardView';
 import { AlunoHistoricoModal } from './components/AlunoHistoricoModal';
 import { LoginView } from './components/LoginView';
-import { Aluno, Tabulacao, Usuario } from './types';
-import { INITIAL_ALUNOS, INITIAL_TABULACOES, INITIAL_USUARIOS } from './data/mockData';
+import { BaseAtendimento } from './components/BaseAtendimento';
+import { Aluno, BaseAtendimentoItem, Tabulacao, Usuario } from './types';
+import { INITIAL_ALUNOS, INITIAL_BASE_ATENDIMENTO, INITIAL_TABULACOES, INITIAL_USUARIOS } from './data/mockData';
 import { cleanDigits, normalizeCpf, formatCompleteCPF, getSaoPauloISOString } from './utils/cpf';
 import {
   saveAlunoSupabase,
@@ -22,6 +23,10 @@ import {
   fetchAlunosSupabase,
   fetchTabulacoesSupabase,
   fetchUsuariosSupabase,
+  fetchBaseAtendimentoSupabase,
+  saveBaseAtendimentoItemSupabase,
+  saveBaseAtendimentoBatchSupabase,
+  deleteBaseAtendimentoItemSupabase,
   searchAlunoByCpfSupabase,
   subscribeToRealtimePresence,
   subscribeToDatabaseChanges,
@@ -59,7 +64,7 @@ export default function App() {
   });
 
   // Navigation Tab
-  const [activeTab, setActiveTab] = useState<'tabulacao' | 'historico' | 'dashboard' | 'usuarios' | 'supabase'>('tabulacao');
+  const [activeTab, setActiveTab] = useState<'tabulacao' | 'historico' | 'dashboard' | 'base_atendimento' | 'usuarios' | 'supabase'>('tabulacao');
 
   // Realtime Presence State (Track who is online in real-time across all browser sessions)
   const [onlineUsersMap, setOnlineUsersMap] = useState<Record<string, PresenceUser>>({});
@@ -81,7 +86,7 @@ export default function App() {
       setMatriculaAtendente(currentUser.matricula || `@${currentUser.usuario}`);
 
       // Role protection: If Operador, prevent accessing forbidden tabs
-      if (currentUser.perfil === 'Operador' && activeTab !== 'tabulacao' && activeTab !== 'historico' && activeTab !== 'dashboard') {
+      if (currentUser.perfil === 'Operador' && activeTab !== 'tabulacao' && activeTab !== 'historico' && activeTab !== 'dashboard' && activeTab !== 'base_atendimento') {
         setActiveTab('tabulacao');
       }
 
@@ -113,13 +118,25 @@ export default function App() {
     return INITIAL_TABULACOES;
   });
 
+  // Persistence State for Base de Atendimento (Campanha WhatsApp)
+  const [baseAtendimento, setBaseAtendimento] = useState<BaseAtendimentoItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('tabulacoes_base_atendimento_db');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return INITIAL_BASE_ATENDIMENTO;
+  });
+
   // Initial Cloud Data Load (Cached & Throttled)
   const loadCloudData = async (force = false) => {
     try {
-      const [cloudAlunos, cloudTabs, cloudUsrs] = await Promise.all([
+      const [cloudAlunos, cloudTabs, cloudUsrs, cloudBase] = await Promise.all([
         fetchAlunosSupabase(force),
         fetchTabulacoesSupabase(force),
         fetchUsuariosSupabase(force),
+        fetchBaseAtendimentoSupabase(force),
       ]);
 
       if (cloudAlunos.data && cloudAlunos.data.length > 0) {
@@ -131,6 +148,9 @@ export default function App() {
       if (cloudUsrs.data && cloudUsrs.data.length > 0) {
         setUsuarios(cloudUsrs.data);
       }
+      if (cloudBase.data && cloudBase.data.length > 0) {
+        setBaseAtendimento(cloudBase.data);
+      }
     } catch (err) {
       console.warn('Supabase initial fetch check:', err);
     }
@@ -138,8 +158,8 @@ export default function App() {
 
   // Real-time zero-egress row-level database updates & initial load
   useEffect(() => {
-    // 1. Initial background load once on startup
-    loadCloudData();
+    // 1. Initial background load once on startup (force fresh complete dataset)
+    loadCloudData(true);
 
     // 2. Ultra-lightweight Realtime Row Stream (pushes only modified rows, eliminating polling egress)
     const dbSub = subscribeToDatabaseChanges(
@@ -186,6 +206,21 @@ export default function App() {
           );
         } else if (event === 'DELETE' && oldId) {
           setUsuarios((prev) => prev.filter((u) => u.id !== oldId));
+        }
+      },
+      // Base de Atendimento realtime events
+      (event, row, oldId) => {
+        if (event === 'INSERT' && row) {
+          setBaseAtendimento((prev) => {
+            const exists = prev.some((b) => b.id === row.id || b.matricula.toLowerCase() === row.matricula.toLowerCase());
+            return exists ? prev : [row, ...prev];
+          });
+        } else if (event === 'UPDATE' && row) {
+          setBaseAtendimento((prev) =>
+            prev.map((b) => (b.id === row.id ? row : b))
+          );
+        } else if (event === 'DELETE' && oldId) {
+          setBaseAtendimento((prev) => prev.filter((b) => b.id !== oldId));
         }
       }
     );
@@ -258,6 +293,14 @@ export default function App() {
       console.error('Error saving usuarios:', e);
     }
   }, [usuarios]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('tabulacoes_base_atendimento_db', JSON.stringify(baseAtendimento));
+    } catch (e) {
+      console.error('Error saving base_atendimento:', e);
+    }
+  }, [baseAtendimento]);
 
   // Login & Logout Handlers
   const handleLogin = (user: Usuario) => {
@@ -498,10 +541,60 @@ export default function App() {
   };
 
   // Callback to sync loaded data from Supabase
-  const handleSyncFromSupabase = (newAlunos: Aluno[], newTabs: Tabulacao[], newUsrs: Usuario[]) => {
+  const handleSyncFromSupabase = (
+    newAlunos: Aluno[],
+    newTabs: Tabulacao[],
+    newUsrs: Usuario[],
+    newBase?: BaseAtendimentoItem[]
+  ) => {
     if (newAlunos.length > 0) setAlunos(newAlunos);
     if (newTabs.length > 0) setTabulacoes(newTabs);
     if (newUsrs.length > 0) setUsuarios(newUsrs);
+    if (newBase && newBase.length > 0) setBaseAtendimento(newBase);
+  };
+
+  // Base de Atendimento Handlers
+  const handleSaveBaseAtendimentoItem = async (item: BaseAtendimentoItem) => {
+    setBaseAtendimento((prev) => {
+      const exists = prev.some((b) => b.id === item.id);
+      if (exists) {
+        return prev.map((b) => (b.id === item.id ? item : b));
+      }
+      return [item, ...prev];
+    });
+
+    saveBaseAtendimentoItemSupabase(item).catch((err) => {
+      console.warn('Erro ao sincronizar item da base de atendimento:', err);
+    });
+    return true;
+  };
+
+  const handleBatchImportBaseAtendimento = async (items: BaseAtendimentoItem[]): Promise<{ count: number; error: string | null }> => {
+    setBaseAtendimento((prev) => {
+      const newItems = items.filter(
+        (newItem) => !prev.some((p) => p.matricula.trim().toLowerCase() === newItem.matricula.trim().toLowerCase())
+      );
+      return [...newItems, ...prev];
+    });
+
+    try {
+      const { count, error } = await saveBaseAtendimentoBatchSupabase(items);
+      if (error) {
+        console.warn('Alerta ao persistir lote na tabela base_atendimento do Supabase:', error);
+      }
+      return { count: count || items.length, error };
+    } catch (err: any) {
+      console.error('Erro ao importar lote da base de atendimento:', err);
+      return { count: items.length, error: err?.message || 'Erro ao sincronizar com banco' };
+    }
+  };
+
+  const handleDeleteBaseAtendimentoItem = async (id: string) => {
+    setBaseAtendimento((prev) => prev.filter((b) => b.id !== id));
+    deleteBaseAtendimentoItemSupabase(id).catch((err) => {
+      console.warn('Erro ao excluir item da base de atendimento:', err);
+    });
+    return true;
   };
 
   // Filter attendances for active student
@@ -625,6 +718,21 @@ export default function App() {
           />
         )}
 
+        {/* Tab: Base de Atendimento (Campanha com WhatsApp e Cruzamento de 60 dias) */}
+        {activeTab === 'base_atendimento' && (
+          <BaseAtendimento
+            baseAtendimento={baseAtendimento}
+            base={baseAtendimento}
+            tabulacoes={tabulacoes}
+            currentUser={currentUser}
+            onSaveItem={handleSaveBaseAtendimentoItem}
+            onBatchImport={handleBatchImportBaseAtendimento}
+            onDeleteItem={handleDeleteBaseAtendimentoItem}
+            onOpenSupabaseScript={() => setActiveTab('supabase')}
+            onRefreshData={() => loadCloudData(true)}
+          />
+        )}
+
         {/* Tab 3: Dashboard Operacional */}
         {activeTab === 'dashboard' && (
           <DashboardView tabulacoes={tabulacoes} usuarios={usuarios} />
@@ -648,6 +756,7 @@ export default function App() {
             alunos={alunos}
             tabulacoes={tabulacoes}
             usuarios={usuarios}
+            baseAtendimento={baseAtendimento}
             onSyncFromSupabase={handleSyncFromSupabase}
           />
         )}
@@ -664,6 +773,8 @@ export default function App() {
             <span>Usuário: <strong>{currentUser.nome}</strong> ({currentUser.perfil})</span>
             <span>•</span>
             <span>Tabulações: <strong>{tabulacoes.length}</strong></span>
+            <span>•</span>
+            <span>Base Alunos: <strong>{baseAtendimento.length}</strong></span>
             {isAdm && (
               <>
                 <span>•</span>

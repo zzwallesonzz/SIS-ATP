@@ -1,6 +1,6 @@
 {
   "name": "Sistema de Tabulação de Atendimento",
-  "description": "Sistema de registro, consulta por CPF, tabulação de atendimentos e gestão de usuários com perfis de Operador, Supervisor e ADM.",
+  "description": "Sistema de registro, consulta por CPF, tabulação de atendimentos, base de atendimento com acionamento WhatsApp e gestão de usuários com perfis de Operador, Supervisor e ADM.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

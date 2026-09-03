@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { Aluno, Tabulacao, Usuario } from '../types';
-import { cleanDigits, normalizeCpf, formatCPF, formatCompleteCPF, getSaoPauloISOString } from '../utils/cpf';
+import { Aluno, BaseAtendimentoItem, Tabulacao, Usuario } from '../types';
+import { cleanDigits, normalizeCpf, formatCPF, formatCompleteCPF, getSaoPauloISOString, generateUUID } from '../utils/cpf';
 
 export const DEFAULT_SUPABASE_URL = 'https://hnlnirmiwsdurrpfdbtz.supabase.co';
 export const DEFAULT_SUPABASE_KEY = 'sb_publishable_ZGb_h9JcWzRv_tKjYvdBBA_RHko4ScQ';
@@ -46,6 +46,7 @@ export interface SupabaseHealthResult {
     alunos: boolean;
     tabulacoes: boolean;
     usuarios: boolean;
+    base_atendimento?: boolean;
   };
   latencyMs?: number;
 }
@@ -59,6 +60,7 @@ export async function checkSupabaseHealth(): Promise<SupabaseHealthResult> {
       alunos: false,
       tabulacoes: false,
       usuarios: false,
+      base_atendimento: false,
     },
   };
 
@@ -93,9 +95,19 @@ export async function checkSupabaseHealth(): Promise<SupabaseHealthResult> {
       result.tables.usuarios = true;
     }
 
+    // Test Base Atendimento table
+    const { data: baseData, error: baseErr } = await supabase
+      .from('base_atendimento')
+      .select('id')
+      .limit(1);
+
+    if (!baseErr) {
+      result.tables.base_atendimento = true;
+    }
+
     result.latencyMs = Date.now() - startTime;
     // Considered connected if at least endpoint reached without network failure
-    result.connected = result.tables.alunos || result.tables.tabulacoes || result.tables.usuarios;
+    result.connected = result.tables.alunos || result.tables.tabulacoes || result.tables.usuarios || !!result.tables.base_atendimento;
     
     if (!result.connected && (alunosErr || tabErr || usrErr)) {
       result.error = alunosErr?.message || tabErr?.message || usrErr?.message || 'Tabelas ainda não criadas no Supabase.';
@@ -114,12 +126,26 @@ export async function checkSupabaseHealth(): Promise<SupabaseHealthResult> {
 let alunosCache: { data: Aluno[]; timestamp: number } | null = null;
 let tabulacoesCache: { data: Tabulacao[]; timestamp: number } | null = null;
 let usuariosCache: { data: Usuario[]; timestamp: number } | null = null;
+let baseAtendimentoCache: { data: BaseAtendimentoItem[]; timestamp: number } | null = null;
 const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes memory cache
 
 export function invalidateSupabaseCache() {
   alunosCache = null;
   tabulacoesCache = null;
   usuariosCache = null;
+  baseAtendimentoCache = null;
+}
+
+export function mapBaseAtendimentoRow(row: any): BaseAtendimentoItem {
+  return {
+    id: row.id,
+    nome: row.nome || '',
+    matricula: row.matricula || '',
+    unidade: row.unidade || '',
+    whatsapp: row.whatsapp || '',
+    observacao: row.observacao || '',
+    createdAt: row.created_at || new Date().toISOString(),
+  };
 }
 
 export function mapAlunoRow(row: any): Aluno {
@@ -199,25 +225,41 @@ export function mapUsuarioRow(row: any): Usuario {
 // ------------------------------------------------------------------
 // ALUNOS
 // ------------------------------------------------------------------
-export async function fetchAlunosSupabase(forceRefresh = false, limitCount = 300): Promise<{ data: Aluno[] | null; error: string | null }> {
+export async function fetchAlunosSupabase(forceRefresh = false): Promise<{ data: Aluno[] | null; error: string | null }> {
   try {
     if (!forceRefresh && alunosCache && Date.now() - alunosCache.timestamp < CACHE_TTL_MS) {
       return { data: alunosCache.data, error: null };
     }
 
-    const { data, error } = await supabase
-      .from('alunos')
-      .select('*')
-      .order('nome', { ascending: true })
-      .limit(limitCount);
+    const allData: any[] = [];
+    let from = 0;
+    const step = 1000;
+    let hasMore = true;
 
-    if (error) {
-      return { data: null, error: error.message };
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('alunos')
+        .select('*')
+        .order('nome', { ascending: true })
+        .range(from, from + step - 1);
+
+      if (error) {
+        return { data: null, error: error.message };
+      }
+
+      if (!data || data.length === 0) {
+        break;
+      }
+
+      allData.push(...data);
+      if (data.length < step) {
+        hasMore = false;
+      } else {
+        from += step;
+      }
     }
 
-    if (!data) return { data: [], error: null };
-
-    const mapped: Aluno[] = data.map(mapAlunoRow);
+    const mapped: Aluno[] = allData.map(mapAlunoRow);
     alunosCache = { data: mapped, timestamp: Date.now() };
 
     return { data: mapped, error: null };
@@ -380,26 +422,42 @@ export async function saveAlunoSupabase(aluno: Aluno): Promise<{ data: Aluno | n
 // ------------------------------------------------------------------
 // TABULAÇÕES
 // ------------------------------------------------------------------
-export async function fetchTabulacoesSupabase(forceRefresh = false, limitCount = 300): Promise<{ data: Tabulacao[] | null; error: string | null }> {
+export async function fetchTabulacoesSupabase(forceRefresh = false): Promise<{ data: Tabulacao[] | null; error: string | null }> {
   try {
     if (!forceRefresh && tabulacoesCache && Date.now() - tabulacoesCache.timestamp < CACHE_TTL_MS) {
       return { data: tabulacoesCache.data, error: null };
     }
 
-    const { data, error } = await supabase
-      .from('tabulacoes')
-      .select('*')
-      .order('data_hora', { ascending: false })
-      .limit(limitCount);
+    const allData: any[] = [];
+    let from = 0;
+    const step = 1000;
+    let hasMore = true;
 
-    if (error) {
-      console.warn('Supabase fetchTabulacoes error:', error.message);
-      return { data: null, error: error.message };
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('tabulacoes')
+        .select('*')
+        .order('data_hora', { ascending: false })
+        .range(from, from + step - 1);
+
+      if (error) {
+        console.warn('Supabase fetchTabulacoes error:', error.message);
+        return { data: null, error: error.message };
+      }
+
+      if (!data || data.length === 0) {
+        break;
+      }
+
+      allData.push(...data);
+      if (data.length < step) {
+        hasMore = false;
+      } else {
+        from += step;
+      }
     }
 
-    if (!data) return { data: [], error: null };
-
-    const mapped: Tabulacao[] = data.map(mapTabulacaoRow);
+    const mapped: Tabulacao[] = allData.map(mapTabulacaoRow);
     tabulacoesCache = { data: mapped, timestamp: Date.now() };
 
     return { data: mapped, error: null };
@@ -675,12 +733,14 @@ export async function deleteUsuarioSupabase(id: string): Promise<{ success: bool
 export async function seedInitialDataToSupabase(
   initialAlunos: Aluno[],
   initialTabulacoes: Tabulacao[],
-  initialUsuarios: Usuario[]
-): Promise<{ alunosCount: number; tabulacoesCount: number; usuariosCount: number; errors: string[] }> {
+  initialUsuarios: Usuario[],
+  initialBaseAtendimento?: BaseAtendimentoItem[]
+): Promise<{ alunosCount: number; tabulacoesCount: number; usuariosCount: number; baseAtendimentoCount: number; errors: string[] }> {
   const errors: string[] = [];
   let aCount = 0;
   let tCount = 0;
   let uCount = 0;
+  let bCount = 0;
 
   // 1. Seed Alunos
   for (const a of initialAlunos) {
@@ -703,12 +763,268 @@ export async function seedInitialDataToSupabase(
     else tCount++;
   }
 
+  // 4. Seed Base de Atendimento (se fornecida)
+  if (initialBaseAtendimento && initialBaseAtendimento.length > 0) {
+    const resBatch = await saveBaseAtendimentoBatchSupabase(initialBaseAtendimento);
+    bCount = resBatch.count;
+    if (resBatch.error) {
+      errors.push(`Base Atendimento: ${resBatch.error}`);
+    }
+  }
+
   return {
     alunosCount: aCount,
     tabulacoesCount: tCount,
     usuariosCount: uCount,
+    baseAtendimentoCount: bCount,
     errors,
   };
+}
+
+// ------------------------------------------------------------------
+// BASE DE ATENDIMENTO
+// ------------------------------------------------------------------
+export async function fetchBaseAtendimentoSupabase(forceRefresh = false): Promise<{ data: BaseAtendimentoItem[] | null; error: string | null }> {
+  try {
+    if (!forceRefresh && baseAtendimentoCache && Date.now() - baseAtendimentoCache.timestamp < CACHE_TTL_MS) {
+      return { data: baseAtendimentoCache.data, error: null };
+    }
+
+    const allData: any[] = [];
+    let from = 0;
+    const step = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('base_atendimento')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, from + step - 1);
+
+      if (error) {
+        // Se a tabela ainda não existir no Supabase, retorna lista vazia amigável
+        if (error.code === '42P01' || error.message.includes('does not exist')) {
+          return { data: [], error: null };
+        }
+        return { data: null, error: error.message };
+      }
+
+      if (!data || data.length === 0) {
+        break;
+      }
+
+      allData.push(...data);
+      if (data.length < step) {
+        hasMore = false;
+      } else {
+        from += step;
+      }
+    }
+
+    const mapped: BaseAtendimentoItem[] = allData.map(mapBaseAtendimentoRow);
+    baseAtendimentoCache = { data: mapped, timestamp: Date.now() };
+
+    return { data: mapped, error: null };
+  } catch (err: any) {
+    return { data: null, error: err?.message || 'Erro ao carregar base de atendimento' };
+  }
+}
+
+export async function saveBaseAtendimentoItemSupabase(item: BaseAtendimentoItem): Promise<{ data: BaseAtendimentoItem | null; error: string | null }> {
+  try {
+    invalidateSupabaseCache();
+
+    const idToUse = isValidUUID(item.id) ? item.id : generateUUID();
+
+    let currentPayload: any = {
+      id: idToUse,
+      nome: item.nome.trim(),
+      matricula: item.matricula.trim(),
+      unidade: item.unidade?.trim() || null,
+      whatsapp: item.whatsapp.trim(),
+      observacao: item.observacao?.trim() || null,
+    };
+
+    let finalData: any = null;
+    let lastError: any = null;
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      // Attempt upsert on matricula
+      let { data, error } = await supabase
+        .from('base_atendimento')
+        .upsert(currentPayload, { onConflict: 'matricula' })
+        .select()
+        .single();
+
+      // If constraint error or conflict on matricula fails, try onConflict id
+      if (error && (error.message.includes('conflict') || error.message.includes('constraint') || error.code === '42P10')) {
+        const res2 = await supabase
+          .from('base_atendimento')
+          .upsert(currentPayload, { onConflict: 'id' })
+          .select()
+          .single();
+        data = res2.data;
+        error = res2.error;
+      }
+
+      if (!error && data) {
+        finalData = data;
+        lastError = null;
+        break;
+      }
+
+      lastError = error;
+      const errMsg = error?.message || '';
+
+      // If observacao column does not exist in the database table
+      if (errMsg.includes('observacao') && 'observacao' in currentPayload) {
+        delete currentPayload.observacao;
+        continue;
+      }
+
+      // If another column does not exist
+      const colMatch = errMsg.match(/Could not find the '([^']+)' column of 'base_atendimento'/);
+      if (colMatch && colMatch[1] && colMatch[1] in currentPayload) {
+        delete currentPayload[colMatch[1]];
+        continue;
+      }
+
+      break;
+    }
+
+    if (lastError || !finalData) {
+      return { data: null, error: lastError?.message || 'Erro ao salvar registro na base de atendimento' };
+    }
+
+    return { data: mapBaseAtendimentoRow(finalData), error: null };
+  } catch (err: any) {
+    return { data: null, error: err?.message || 'Erro ao salvar registro na base de atendimento' };
+  }
+}
+
+export async function saveBaseAtendimentoBatchSupabase(items: BaseAtendimentoItem[]): Promise<{ count: number; error: string | null }> {
+  try {
+    invalidateSupabaseCache();
+
+    if (items.length === 0) return { count: 0, error: null };
+
+    const payload = items.map((item) => {
+      const idToUse = isValidUUID(item.id) ? item.id : generateUUID();
+      return {
+        id: idToUse,
+        nome: item.nome.trim(),
+        matricula: item.matricula.trim(),
+        unidade: item.unidade?.trim() || null,
+        whatsapp: item.whatsapp.trim(),
+        observacao: item.observacao?.trim() || null,
+      };
+    });
+
+    // Chunk in batches of 50 to guarantee reliable delivery without hitting HTTP payload limits
+    const CHUNK_SIZE = 50;
+    let savedCount = 0;
+    let lastError: string | null = null;
+
+    for (let i = 0; i < payload.length; i += CHUNK_SIZE) {
+      let chunk = payload.slice(i, i + CHUNK_SIZE);
+      let chunkSaved = false;
+
+      for (let attempt = 0; attempt < 4; attempt++) {
+        // Attempt 1: Upsert on matricula to avoid duplicate key errors
+        let { data, error } = await supabase
+          .from('base_atendimento')
+          .upsert(chunk, { onConflict: 'matricula' })
+          .select('id');
+
+        // Attempt 2: If onConflict on matricula fails due to no unique constraint on matricula, upsert on id
+        if (error && (error.message.includes('conflict') || error.message.includes('constraint') || error.code === '42P10')) {
+          const res2 = await supabase
+            .from('base_atendimento')
+            .upsert(chunk, { onConflict: 'id' })
+            .select('id');
+          data = res2.data;
+          error = res2.error;
+        }
+
+        // Attempt 3: If upsert is not supported, fallback to insert
+        if (error && error.code !== '42P01' && !error.message.includes('schema cache')) {
+          const res3 = await supabase
+            .from('base_atendimento')
+            .insert(chunk)
+            .select('id');
+          data = res3.data;
+          error = res3.error;
+        }
+
+        if (!error) {
+          savedCount += data?.length || chunk.length;
+          chunkSaved = true;
+          break;
+        }
+
+        lastError = error.message;
+        const errMsg = error.message || '';
+
+        // Handle missing column (e.g. observacao)
+        if (errMsg.includes('observacao')) {
+          chunk = chunk.map((item: any) => {
+            const copy = { ...item };
+            delete copy.observacao;
+            return copy;
+          });
+          continue;
+        }
+
+        const colMatch = errMsg.match(/Could not find the '([^']+)' column of 'base_atendimento'/);
+        if (colMatch && colMatch[1]) {
+          const colName = colMatch[1];
+          chunk = chunk.map((item: any) => {
+            const copy = { ...item };
+            delete copy[colName];
+            return copy;
+          });
+          continue;
+        }
+
+        break;
+      }
+
+      if (!chunkSaved && lastError) {
+        console.error('Erro ao salvar chunk na base_atendimento:', lastError);
+        if (lastError.includes('does not exist') || lastError.includes('42P01')) {
+          return {
+            count: savedCount,
+            error: 'A tabela "base_atendimento" ainda não existe no seu Supabase. Execute o script SQL no painel do Supabase.'
+          };
+        }
+      }
+    }
+
+    if (savedCount === 0 && lastError) {
+      return { count: 0, error: lastError };
+    }
+
+    return { count: savedCount, error: null };
+  } catch (err: any) {
+    return { count: 0, error: err?.message || 'Erro ao importar lote para a base de atendimento' };
+  }
+}
+
+export async function deleteBaseAtendimentoItemSupabase(id: string): Promise<{ success: boolean; error: string | null }> {
+  try {
+    invalidateSupabaseCache();
+
+    const { error } = await supabase
+      .from('base_atendimento')
+      .delete()
+      .eq('id', id);
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, error: null };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Erro ao excluir da base de atendimento' };
+  }
 }
 
 // ------------------------------------------------------------------
@@ -829,7 +1145,8 @@ export function subscribeToRealtimePresence(
 export function subscribeToDatabaseChanges(
   onTabulacaoEvent: (event: 'INSERT' | 'UPDATE' | 'DELETE', row: Tabulacao | null, oldId?: string) => void,
   onAlunoEvent: (event: 'INSERT' | 'UPDATE' | 'DELETE', row: Aluno | null, oldId?: string) => void,
-  onUsuarioEvent: (event: 'INSERT' | 'UPDATE' | 'DELETE', row: Usuario | null, oldId?: string) => void
+  onUsuarioEvent: (event: 'INSERT' | 'UPDATE' | 'DELETE', row: Usuario | null, oldId?: string) => void,
+  onBaseAtendimentoEvent?: (event: 'INSERT' | 'UPDATE' | 'DELETE', row: BaseAtendimentoItem | null, oldId?: string) => void
 ) {
   const dbChannel = supabase.channel('sis_atp_db_realtime_sync');
 
@@ -882,6 +1199,25 @@ export function subscribeToDatabaseChanges(
         } else if (payload.eventType === 'DELETE') {
           const oldId = payload.old?.id;
           onUsuarioEvent('DELETE', null, oldId);
+        }
+      }
+    )
+    // 4. Base de Atendimento
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'base_atendimento' },
+      (payload) => {
+        invalidateSupabaseCache();
+        if (onBaseAtendimentoEvent) {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            if (payload.new) {
+              const mapped = mapBaseAtendimentoRow(payload.new);
+              onBaseAtendimentoEvent(payload.eventType, mapped);
+            }
+          } else if (payload.eventType === 'DELETE') {
+            const oldId = payload.old?.id;
+            onBaseAtendimentoEvent('DELETE', null, oldId);
+          }
         }
       }
     )

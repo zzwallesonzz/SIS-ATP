@@ -96,7 +96,7 @@ export interface CategoriaMotivoItem {
   submotivos: string[];
 }
 
-export type PerfilUsuario = 'Operador' | 'Supervisor' | 'Gerencial' | 'ADM';
+export type PerfilUsuario = 'Operador' | 'Supervisor' | 'Gerencial' | 'ADM' | 'Cliente';
 
 export interface Usuario {
   id: string;
@@ -111,5 +111,21 @@ export interface Usuario {
   ultimoLogin?: string; // Data e hora do último login (ISO string)
   isOnline?: boolean; // Sinalização se usuário está logado/ativo no momento
   createdAt: string;
+}
+
+export type StatusAtendimento60Dias = 
+  | 'Negociação'
+  | 'Recusa'
+  | 'Informação'
+  | 'Sem Histórico';
+
+export interface BaseAtendimentoItem {
+  id: string;
+  nome: string;
+  matricula: string;
+  unidade: string;
+  whatsapp: string;
+  observacao?: string;
+  createdAt?: string;
 }
 
