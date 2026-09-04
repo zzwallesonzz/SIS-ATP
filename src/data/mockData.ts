@@ -517,6 +517,26 @@ CREATE TABLE IF NOT EXISTS public.usuarios (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Atualiza a constraint em bancos já existentes para aceitar o perfil Cliente
+DO $$
+DECLARE
+  constraint_record RECORD;
+BEGIN
+  FOR constraint_record IN
+    SELECT conname
+    FROM pg_constraint
+    WHERE conrelid = 'public.usuarios'::regclass
+      AND contype = 'c'
+      AND pg_get_constraintdef(oid) ILIKE '%perfil%'
+  LOOP
+    EXECUTE format('ALTER TABLE public.usuarios DROP CONSTRAINT %I', constraint_record.conname);
+  END LOOP;
+END $$;
+
+ALTER TABLE public.usuarios
+  ADD CONSTRAINT usuarios_perfil_check
+  CHECK (perfil IN ('Operador', 'Supervisor', 'Gerencial', 'Cliente', 'ADM'));
+
 -- Índices para buscas e login rápido
 CREATE INDEX IF NOT EXISTS idx_usuarios_login ON public.usuarios(usuario);
 CREATE INDEX IF NOT EXISTS idx_usuarios_perfil ON public.usuarios(perfil);

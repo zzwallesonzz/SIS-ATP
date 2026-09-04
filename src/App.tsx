@@ -529,7 +529,11 @@ export default function App() {
     });
 
     // Background sync to Supabase
-    saveUsuarioSupabase(user).catch((e) => console.warn('Supabase save user sync:', e));
+    saveUsuarioSupabase(user).then(({ error }) => {
+      if (error) {
+        console.warn('Supabase save user sync:', error);
+      }
+    }).catch((e) => console.warn('Supabase save user sync:', e));
 
     // If current logged-in user was updated, sync state
     if (currentUser && currentUser.id === user.id) {
