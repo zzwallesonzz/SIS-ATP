@@ -319,7 +319,8 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
     const supervisores = usuarios.filter((u) => u.perfil === 'Supervisor').length;
     const gerenciais = usuarios.filter((u) => u.perfil === 'Gerencial').length;
     const adms = usuarios.filter((u) => u.perfil === 'ADM').length;
-    return { total, online, operadores, supervisores, gerenciais, adms };
+    const clientes = usuarios.filter((u) => u.perfil === 'Cliente').length;
+    return { total, online, operadores, supervisores, gerenciais, adms, clientes };
   }, [usuarios, currentUser, onlineUsersMap]);
 
   return (
@@ -338,7 +339,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
               Gestão de Usuários
             </h1>
             <p className="text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Monitore status em tempo real (online/logados), data e hora de último acesso e controle permissões entre <strong>Operador</strong>, <strong>Supervisor</strong>, <strong>Gerencial</strong> e <strong>ADM</strong>.
+              Monitore status em tempo real (online/logados), data e hora de último acesso e controle permissões entre <strong>Operador</strong>, <strong>Supervisor</strong>, <strong>Gerencial</strong>, <strong>Cliente</strong> e <strong>ADM</strong>.
             </p>
           </div>
 
@@ -443,6 +444,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                 <option value="Operador">Operadores ({metrics.operadores})</option>
                 <option value="Supervisor">Supervisores ({metrics.supervisores})</option>
                 <option value="Gerencial">Gerencial ({metrics.gerenciais})</option>
+                <option value="Cliente">Clientes ({metrics.clientes})</option>
                 <option value="ADM">ADMs ({metrics.adms})</option>
               </select>
             </div>
@@ -652,6 +654,12 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
                               <User className="w-3 h-3 text-indigo-700" />
                               Operador
+                            </span>
+                          )}
+                          {u.perfil === 'Cliente' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                              <UserCheck className="w-3 h-3 text-amber-700" />
+                              Cliente
                             </span>
                           )}
                         </td>
@@ -900,14 +908,14 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                 </div>
               </div>
 
-              {/* 3. PERFIL (Operador | Supervisor | Gerencial | ADM) */}
+              {/* 3. PERFIL (Operador | Supervisor | Gerencial | Cliente | ADM) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
                   PERFIL DE ACESSO <span className="text-rose-500">*</span>
                 </label>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                   
                   {/* Operador Pill */}
                   <button
@@ -975,6 +983,28 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                     </div>
                     <p className="text-xs font-bold leading-none">Gerencial</p>
                     <span className="text-[10px] text-slate-500 font-normal mt-1 block">Relatórios</span>
+                  </button>
+
+                  {/* Cliente Pill */}
+                  <button
+                    type="button"
+                    id="perfil-btn-cliente"
+                    onClick={() => {
+                      setPerfil('Cliente');
+                      setSupervisor('');
+                    }}
+                    className={`p-3 rounded-xl border text-left transition-all relative cursor-pointer ${
+                      perfil === 'Cliente'
+                        ? 'bg-amber-50/80 border-amber-600 text-amber-950 shadow-xs ring-1 ring-amber-600'
+                        : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <UserCheck className={`w-4 h-4 ${perfil === 'Cliente' ? 'text-amber-600' : 'text-slate-400'}`} />
+                      {perfil === 'Cliente' && <Check className="w-3.5 h-3.5 text-amber-600 font-bold" />}
+                    </div>
+                    <p className="text-xs font-bold leading-none">Cliente</p>
+                    <span className="text-[10px] text-slate-500 font-normal mt-1 block">Consulta</span>
                   </button>
 
                   {/* ADM Pill */}

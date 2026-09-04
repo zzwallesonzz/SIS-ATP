@@ -85,6 +85,11 @@ export default function App() {
       setAtendenteNome(currentUser.nome);
       setMatriculaAtendente(currentUser.matricula || `@${currentUser.usuario}`);
 
+      // Role protection: Cliente can access only Histórico, Base and Dashboard
+      if (currentUser.perfil === 'Cliente' && activeTab !== 'historico' && activeTab !== 'dashboard' && activeTab !== 'base_atendimento') {
+        setActiveTab('historico');
+      }
+
       // Role protection: If Operador, prevent accessing forbidden tabs
       if (currentUser.perfil === 'Operador' && activeTab !== 'tabulacao' && activeTab !== 'historico' && activeTab !== 'dashboard' && activeTab !== 'base_atendimento') {
         setActiveTab('tabulacao');
@@ -610,7 +615,8 @@ export default function App() {
   const isOperador = currentUser.perfil === 'Operador';
   const isAdm = currentUser.perfil === 'ADM';
   const isGerencial = currentUser.perfil === 'Gerencial';
-  const isSupervisorOrAdm = currentUser.perfil === 'Supervisor' || isGerencial || isAdm;
+  const isCliente = currentUser.perfil === 'Cliente';
+  const isDashboardUser = currentUser.perfil === 'Supervisor' || isGerencial || isAdm || isCliente;
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-900 selection:bg-indigo-500 selection:text-white">
@@ -626,10 +632,10 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-[100rem] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         
         {/* Tab 1: Nova Tabulação de Atendimento (Liberada para Operador, Supervisor e ADM) */}
-        {activeTab === 'tabulacao' && (
+        {activeTab === 'tabulacao' && !isCliente && (
           <div className="space-y-6">
             
             {/* Notificação de Acionamento Realizado com Sucesso (3 segundos) */}
@@ -734,12 +740,12 @@ export default function App() {
         )}
 
         {/* Tab 3: Dashboard Operacional */}
-        {activeTab === 'dashboard' && (
+        {activeTab === 'dashboard' && isDashboardUser && (
           <DashboardView tabulacoes={tabulacoes} usuarios={usuarios} />
         )}
 
         {/* Tab 4: Gestão de Usuários (Apenas Supervisor e ADM) */}
-        {activeTab === 'usuarios' && isSupervisorOrAdm && (
+        {activeTab === 'usuarios' && (currentUser.perfil === 'Supervisor' || isGerencial || isAdm) && (
           <UsuariosView
             usuarios={usuarios}
             currentUser={currentUser}
@@ -765,7 +771,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 text-xs py-4 mt-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div className="max-w-[100rem] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
           <p>
             Sistema de Tabulação de Atendimento ao Aluno • Controle de Acessos por Perfil
           </p>

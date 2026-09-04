@@ -36,11 +36,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isSupervisor = currentUser?.perfil === 'Supervisor';
   const isGerencial = currentUser?.perfil === 'Gerencial';
   const isAdm = currentUser?.perfil === 'ADM';
-  const isSupervisorOrAdm = isSupervisor || isGerencial || isAdm;
+  const isCliente = currentUser?.perfil === 'Cliente';
+  const isDashboardUser = isSupervisor || isGerencial || isAdm || isCliente;
 
   return (
     <header className="bg-slate-900 text-white sticky top-0 z-40 shadow-md border-b border-slate-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[100rem] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
           
           {/* Logo and Brand */}
@@ -62,19 +63,21 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Navigation Tabs (Filtered by Role) */}
           <nav className="hidden md:flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60">
             
-            {/* Tab: Tabulação (Liberada para todos) */}
-            <button
-              id="tab-btn-nova-tabulacao"
-              onClick={() => setActiveTab('tabulacao')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'tabulacao'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-              }`}
-            >
-              <Headphones className="w-4 h-4" />
-              Tabulação
-            </button>
+            {/* Tab: Tabulação (indisponível para Cliente) */}
+            {!isCliente && (
+              <button
+                id="tab-btn-nova-tabulacao"
+                onClick={() => setActiveTab('tabulacao')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  activeTab === 'tabulacao'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                }`}
+              >
+                <Headphones className="w-4 h-4" />
+                Tabulação
+              </button>
+            )}
 
             {/* Tab: Histórico (Liberado para todos, filtrado para operador) */}
             <button
@@ -105,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             {/* Tab: Dashboard Operacional */}
-            {isSupervisorOrAdm && (
+            {isDashboardUser && (
               <button
                 id="tab-btn-dashboard"
                 onClick={() => setActiveTab('dashboard')}
@@ -121,7 +124,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
 
             {/* Tab: Gestão de Usuários (Apenas Supervisor e ADM) */}
-            {isSupervisorOrAdm && (
+            {(isSupervisor || isGerencial || isAdm) && (
               <button
                 id="tab-btn-usuarios"
                 onClick={() => setActiveTab('usuarios')}
@@ -263,7 +266,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             Base
           </button>
 
-          {isSupervisorOrAdm && (
+          {(isSupervisor || isGerencial || isAdm) && (
             <button
               onClick={() => setActiveTab('usuarios')}
               className={`flex flex-col items-center py-1 px-2 text-[11px] font-medium rounded ${
