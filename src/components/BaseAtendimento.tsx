@@ -86,6 +86,8 @@ export const BaseAtendimento: React.FC<BaseAtendimentoProps> = ({
   const [selectedStatus, setSelectedStatus] = useState<string>('TODOS');
   const [sortField, setSortField] = useState<'nome' | 'matricula' | 'unidade' | 'status'>('nome');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
 
   // Modais
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
@@ -300,6 +302,19 @@ export const BaseAtendimento: React.FC<BaseAtendimentoProps> = ({
       return sortDirection === 'asc' ? cmp : -cmp;
     });
   }, [enrichedList, searchTerm, selectedUnidade, selectedStatus, sortField, sortDirection]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedUnidade, selectedStatus, sortField, sortDirection]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredList.length / pageSize));
+  const paginatedList = filteredList.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   // Inserir variável na caixa de mensagem no local do cursor
   const handleInsertVariable = (variableKey: string) => {
@@ -873,7 +888,7 @@ export const BaseAtendimento: React.FC<BaseAtendimentoProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredList.map((item) => {
+                paginatedList.map((item) => {
                   return (
                     <tr 
                       key={item.id} 
@@ -975,6 +990,32 @@ export const BaseAtendimento: React.FC<BaseAtendimentoProps> = ({
             </tbody>
           </table>
         </div>
+
+        {filteredList.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 bg-slate-50/70">
+            <span className="text-xs text-slate-500">
+              Página <strong>{currentPage}</strong> de <strong>{totalPages}</strong> • {pageSize} por página
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                Próxima
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ------------------------------------------------------------------ */}
