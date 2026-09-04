@@ -132,221 +132,9 @@ export const FRASES_RAPIDAS = [
   },
 ];
 
-export const INITIAL_ALUNOS: Aluno[] = [
-  {
-    id: 'alu-01',
-    cpf: '123.456.789-00',
-    nome: 'Ana Clara Silva Ribeiro',
-    matricula: 'RA20240188',
-    ra: 'RA20240188',
-    email: 'anaclara.silva@email.com',
-    telefone: '(11) 98765-4321',
-    curso: 'Direito',
-    polo: 'Campus Central - São Paulo/SP',
-    modalidade: 'Presencial',
-    semestre: '5º Semestre',
-    statusAcademico: 'ATIVO',
-    dataNascimento: '1999-04-15',
-    observacoesGerais: 'Bolsista PROUNI 50%. Excelente frequência.',
-    dataCadastro: '2024-01-10',
-  },
-  {
-    id: 'alu-02',
-    cpf: '987.654.321-11',
-    nome: 'Lucas Oliveira Ferreira',
-    matricula: 'RA20230512',
-    ra: 'RA20230512',
-    email: 'lucas.oliveira.fe@gmail.com',
-    telefone: '(21) 99123-8877',
-    curso: 'Engenharia de Software',
-    polo: 'Polo Digital EAD - Rio de Janeiro/RJ',
-    modalidade: 'EAD',
-    semestre: '3º Semestre',
-    statusAcademico: 'ATIVO',
-    dataNascimento: '2001-11-20',
-    observacoesGerais: 'Acesso frequente pelo AVA. Solicita suporte aos sábados.',
-    dataCadastro: '2023-08-15',
-  },
-  {
-    id: 'alu-03',
-    cpf: '456.789.123-22',
-    nome: 'Beatriz Santos Souza',
-    matricula: 'RA20220944',
-    ra: 'RA20220944',
-    email: 'beatriz.souza@outlook.com',
-    telefone: '(31) 98456-1122',
-    curso: 'Administração',
-    polo: 'Polo BH Savassi - Belo Horizonte/MG',
-    modalidade: 'Semipresencial',
-    semestre: '7º Semestre',
-    statusAcademico: 'INATIVO',
-    dataNascimento: '1998-07-03',
-    observacoesGerais: 'Mensalidade do mês anterior em aberto. Aberto a negociação.',
-    dataCadastro: '2022-02-01',
-  },
-  {
-    id: 'alu-04',
-    cpf: '789.123.456-33',
-    nome: 'Carlos Eduardo Mendes',
-    matricula: 'RA20250031',
-    ra: 'RA20250031',
-    email: 'carlos.mendes@empresa.com.br',
-    telefone: '(41) 97111-3344',
-    curso: 'Psicologia',
-    polo: 'Campus Curitiba - Curitiba/PR',
-    modalidade: 'Presencial',
-    semestre: '1º Semestre',
-    statusAcademico: 'INATIVO',
-    dataNascimento: '2004-02-18',
-    observacoesGerais: 'Documentos de conclusão do Ensino Médio pendentes.',
-    dataCadastro: '2025-01-20',
-  },
-  {
-    id: 'alu-05',
-    cpf: '321.654.987-44',
-    nome: 'Juliana Paes de Camargo',
-    matricula: 'RA20210790',
-    ra: 'RA20210790',
-    email: 'juliana.camargo@live.com',
-    telefone: '(51) 99888-5544',
-    curso: 'Enfermagem',
-    polo: 'Campus Porto Alegre - Porto Alegre/RS',
-    modalidade: 'Presencial',
-    semestre: '8º Semestre',
-    statusAcademico: 'INATIVO',
-    dataNascimento: '1997-09-12',
-    observacoesGerais: 'Trancou no semestre passado por motivo de saúde.',
-    dataCadastro: '2021-03-05',
-  }
-];
+export const INITIAL_ALUNOS: Aluno[] = [];
 
-export const INITIAL_TABULACOES: Tabulacao[] = [
-  {
-    id: 'tab-01',
-    protocolo: 'ATD-20260829-1042',
-    unidade: 'Campus Central - São Paulo/SP',
-    assessoriaAtendimento: 'Assessoria de Cobrança & Negociação',
-    statusAluno: 'INATIVO',
-    alunoCpf: '123.456.789-00',
-    alunoNome: 'Ana Clara Silva Ribeiro',
-    alunoEmail: 'ana.ribeiro@email.com',
-    alunoTelefone: '(11) 98765-4321',
-    alunoRa: 'RA20240188',
-    alunoCurso: 'Direito',
-    alunoPolo: 'Campus Central - São Paulo/SP',
-    dataHora: '2026-08-29T09:15:00',
-    atendenteNome: 'Wellington Barbosa',
-    matriculaAtendente: 'OP-8821',
-    canalAtendimento: 'WhatsApp',
-    categoriaMotivo: 'NEGOCIAÇÃO',
-    submotivo: 'Acordo / Parcelamento de mensalidades em atraso',
-    tipoNegociacao: 'PIX',
-    comRenovacao: false,
-    quantidadeParcelas: 1,
-    dataPrimeiraParcela: '2026-08-30',
-    valorEntrada: 750.00,
-    valorTotalAcordo: 750.00,
-    statusAtendimento: 'Resolvido no 1º Contato',
-    tempoAtendimentoMinutos: 4,
-    detalhamento: 'Aluna realizou acordo para pagamento à vista via PIX com desconto. Chave PIX gerada e enviada via WhatsApp.',
-    acoesTomadas: [],
-    createdAt: '2026-08-29T09:19:00',
-  },
-  {
-    id: 'tab-02',
-    protocolo: 'ATD-20260828-9820',
-    unidade: 'Polo Digital EAD',
-    assessoriaAtendimento: 'Assessoria de Cobrança & Negociação',
-    statusAluno: 'ATIVO',
-    alunoCpf: '987.654.321-11',
-    alunoNome: 'Lucas Oliveira Ferreira',
-    alunoEmail: 'lucas.ferreira@gmail.com',
-    alunoTelefone: '(21) 99123-9876',
-    alunoRa: 'RA20230512',
-    alunoCurso: 'Engenharia de Software',
-    alunoPolo: 'Polo Digital EAD',
-    dataHora: '2026-08-28T16:30:00',
-    atendenteNome: 'Wellington Barbosa',
-    matriculaAtendente: 'OP-8821',
-    canalAtendimento: 'WhatsApp',
-    categoriaMotivo: 'NEGOCIAÇÃO',
-    submotivo: 'Negociação de débitos com emissão de boleto bancário',
-    tipoNegociacao: 'BOLETO',
-    comRenovacao: true,
-    quantidadeParcelas: 4,
-    dataPrimeiraParcela: '2026-09-05',
-    valorEntrada: 300.00,
-    valorParcela: 250.00,
-    valorTotalAcordo: 1050.00,
-    statusAtendimento: 'Resolvido no 1º Contato',
-    tempoAtendimentoMinutos: 6,
-    detalhamento: 'Aluno negociou débitos em 4x via Boleto (Entrada R$ 300,00 com vencimento em 05/09 + 3 parcelas de R$ 250,00). Boletos encaminhados por e-mail e WhatsApp.',
-    acoesTomadas: [],
-    createdAt: '2026-08-28T16:36:00',
-  },
-  {
-    id: 'tab-03',
-    protocolo: 'ATD-20260827-4412',
-    unidade: 'Polo BH Savassi - Belo Horizonte/MG',
-    assessoriaAtendimento: 'Assessoria de Cobrança & Negociação',
-    statusAluno: 'INATIVO',
-    alunoCpf: '456.789.123-22',
-    alunoNome: 'Beatriz Santos Souza',
-    alunoEmail: 'beatriz.souza@outlook.com',
-    alunoTelefone: '(31) 98456-1122',
-    alunoRa: 'RA20220944',
-    alunoCurso: 'Administração',
-    alunoPolo: 'Polo BH Savassi - Belo Horizonte/MG',
-    dataHora: '2026-08-27T11:00:00',
-    atendenteNome: 'Mariana Costa',
-    matriculaAtendente: 'OP-7410',
-    canalAtendimento: 'Telefone',
-    categoriaMotivo: 'NEGOCIAÇÃO',
-    submotivo: 'Quitação com utilização de saldo FGTS',
-    tipoNegociacao: 'FGTS',
-    comRenovacao: false,
-    quantidadeParcelas: 1,
-    dataPrimeiraParcela: '2026-09-01',
-    valorEntrada: 1450.00,
-    valorTotalAcordo: 1450.00,
-    statusAtendimento: 'Resolvido no 1º Contato',
-    tempoAtendimentoMinutos: 8,
-    detalhamento: 'Aluna formalizou o termo para quitação integral através do FGTS.',
-    acoesTomadas: [],
-    createdAt: '2026-08-27T11:11:00',
-  },
-  {
-    id: 'tab-04',
-    protocolo: 'ATD-20260826-3390',
-    unidade: 'Campus Curitiba - Curitiba/PR',
-    assessoriaAtendimento: 'Assessoria de Cobrança & Negociação',
-    statusAluno: 'INATIVO',
-    alunoCpf: '789.123.456-33',
-    alunoNome: 'Carlos Eduardo Mendes',
-    alunoEmail: 'carlos.mendes@empresa.com.br',
-    alunoTelefone: '(41) 97111-3344',
-    alunoRa: 'RA20250031',
-    alunoCurso: 'Psicologia',
-    alunoPolo: 'Campus Curitiba - Curitiba/PR',
-    dataHora: '2026-08-26T14:20:00',
-    atendenteNome: 'Wellington Barbosa',
-    matriculaAtendente: 'OP-8821',
-    canalAtendimento: 'WhatsApp',
-    categoriaMotivo: 'NEGOCIAÇÃO',
-    submotivo: 'Pagamento de matrícula via Cartão de Crédito',
-    tipoNegociacao: 'CARTÃO DE CRÉDITO',
-    comRenovacao: false,
-    quantidadeParcelas: 1,
-    dataPrimeiraParcela: '2026-08-26',
-    valorEntrada: 490.00,
-    valorTotalAcordo: 490.00,
-    statusAtendimento: 'Resolvido no 1º Contato',
-    tempoAtendimentoMinutos: 5,
-    detalhamento: 'Link de pagamento seguro com cartão de crédito aprovado.',
-    acoesTomadas: [],
-    createdAt: '2026-08-26T14:25:00',
-  }
-];
+export const INITIAL_TABULACOES: Tabulacao[] = [];
 
 export const INITIAL_USUARIOS: Usuario[] = [
   {
@@ -587,7 +375,23 @@ ALTER ROLE anon SET timezone TO 'America/Sao_Paulo';
 ALTER ROLE authenticated SET timezone TO 'America/Sao_Paulo';
 ALTER ROLE service_role SET timezone TO 'America/Sao_Paulo';
 
--- 2. Atualizar Tabela de Tabulações com Novas Colunas
+-- 2. Habilitar Múltiplas Matrículas por CPF na Tabela de Alunos (remover restrição de CPF único)
+ALTER TABLE public.alunos DROP CONSTRAINT IF EXISTS alunos_cpf_key;
+DROP INDEX IF EXISTS public.alunos_cpf_key;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'alunos_cpf_matricula_key'
+  ) THEN
+    BEGIN
+      ALTER TABLE public.alunos ADD CONSTRAINT alunos_cpf_matricula_key UNIQUE (cpf, matricula);
+    EXCEPTION WHEN duplicate_table OR duplicate_object THEN
+      NULL;
+    END;
+  END IF;
+END $$;
+
+-- 3. Atualizar Tabela de Tabulações com Novas Colunas
 ALTER TABLE public.tabulacoes ADD COLUMN IF NOT EXISTS com_renovacao BOOLEAN DEFAULT false;
 ALTER TABLE public.tabulacoes ADD COLUMN IF NOT EXISTS unidade VARCHAR(100);
 ALTER TABLE public.tabulacoes ADD COLUMN IF NOT EXISTS assessoria_atendimento VARCHAR(100);
@@ -658,6 +462,30 @@ BEGIN
 END $$;
 `;
 
+export const SUPABASE_SQL_MULTI_MATRICULA = `-- ==============================================================================
+-- AJUSTE PARA MÚLTIPLAS MATRÍCULAS POR CPF (TABELA ALUNOS)
+-- Permite cadastrar o mesmo aluno (CPF) com matrículas diferentes no Supabase
+-- ==============================================================================
+
+-- 1. Remove a restrição antiga que impedia mais de um cadastro por CPF
+ALTER TABLE public.alunos DROP CONSTRAINT IF EXISTS alunos_cpf_key;
+DROP INDEX IF EXISTS public.alunos_cpf_key;
+
+-- 2. Cria a nova restrição composta que garante unicidade por (CPF + Matrícula)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'alunos_cpf_matricula_key'
+  ) THEN
+    BEGIN
+      ALTER TABLE public.alunos ADD CONSTRAINT alunos_cpf_matricula_key UNIQUE (cpf, matricula);
+    EXCEPTION WHEN duplicate_table OR duplicate_object THEN
+      NULL;
+    END;
+  END IF;
+END $$;
+`;
+
 export const SUPABASE_SQL_SCHEMA = `-- ==============================================================================
 -- SISTEMA SIS ATP - SCHEMA SUPABASE COMPLETO (PostgreSQL DDL + RLS + Índices + Realtime + Seeds)
 -- Execute no SQL Editor do Supabase para configurar todo o banco de uma só vez
@@ -724,7 +552,7 @@ ON CONFLICT (usuario) DO UPDATE SET
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.alunos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  cpf VARCHAR(14) UNIQUE NOT NULL,
+  cpf VARCHAR(14) NOT NULL,
   nome VARCHAR(255) NOT NULL,
   matricula VARCHAR(50) NOT NULL,
   email VARCHAR(255) NOT NULL,
@@ -733,8 +561,24 @@ CREATE TABLE IF NOT EXISTS public.alunos (
   curso VARCHAR(255),
   polo VARCHAR(255),
   status_academico VARCHAR(50) DEFAULT 'ATIVO',
-  data_cadastro TIMESTAMPTZ DEFAULT NOW()
+  data_cadastro TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT alunos_cpf_matricula_key UNIQUE (cpf, matricula)
 );
+
+-- Permitir múltiplas matrículas para o mesmo CPF (remover unicidade exclusiva de CPF se existente)
+ALTER TABLE public.alunos DROP CONSTRAINT IF EXISTS alunos_cpf_key;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'alunos_cpf_matricula_key'
+  ) THEN
+    BEGIN
+      ALTER TABLE public.alunos ADD CONSTRAINT alunos_cpf_matricula_key UNIQUE (cpf, matricula);
+    EXCEPTION WHEN duplicate_table OR duplicate_object THEN
+      NULL;
+    END;
+  END IF;
+END $$;
 
 -- Índices de consulta de alunos por CPF, Matrícula e Nome
 CREATE INDEX IF NOT EXISTS idx_alunos_cpf ON public.alunos(cpf);
@@ -927,7 +771,7 @@ VALUES
 -- 5. Criar Tabela de Alunos
 CREATE TABLE public.alunos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  cpf VARCHAR(14) UNIQUE NOT NULL,
+  cpf VARCHAR(14) NOT NULL,
   nome VARCHAR(255) NOT NULL,
   matricula VARCHAR(50) NOT NULL,
   email VARCHAR(255) NOT NULL,
@@ -936,7 +780,8 @@ CREATE TABLE public.alunos (
   curso VARCHAR(255),
   polo VARCHAR(255),
   status_academico VARCHAR(50) DEFAULT 'ATIVO',
-  data_cadastro TIMESTAMPTZ DEFAULT NOW()
+  data_cadastro TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT alunos_cpf_matricula_key UNIQUE (cpf, matricula)
 );
 
 CREATE INDEX idx_alunos_cpf ON public.alunos(cpf);

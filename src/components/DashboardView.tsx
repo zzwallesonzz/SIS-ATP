@@ -12,6 +12,7 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  AlertCircle,
 } from 'lucide-react';
 import { Tabulacao, Usuario } from '../types';
 
@@ -72,6 +73,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
   // Sorting state for "Resumo por operador"
   const [sortOperadorField, setSortOperadorField] = useState<OperadorSortField>('quantidadeAtendimentos');
   const [sortOperadorDirection, setSortOperadorDirection] = useState<SortDirection>('desc');
+
+  // View mode for Recusas: 'barras' (igual a Volume por unidade) or 'tabela'
+  const [viewModeRecusas, setViewModeRecusas] = useState<'barras' | 'tabela'>('barras');
 
   const handleSortUnidade = (field: UnidadeSortField) => {
     if (sortUnidadeField === field) {
@@ -312,6 +316,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
     }));
   }, [tabelaPorUnidade]);
 
+  // Recusas por "3. Submotivo Específico"
+  // Regra estrita: O que for tabulado como Negociação ou Informação não deve ser contabilizado e mostrado
+  const recusasSubmotivos = useMemo(() => {
+    const recusasOnly = filteredTabulacoes.filter((tab) => {
+      const cat = (tab.categoriaMotivo || '').trim().toUpperCase();
+      if (cat.includes('NEGOCIA') || cat.includes('INFORMA')) return false;
+      return cat === 'RECUSA';
+    });
+
+    const total = recusasOnly.length;
+    const countMap = new Map<string, number>();
+
+    recusasOnly.forEach((tab) => {
+      const sub = (tab.submotivo || '').trim() || 'Não especificado';
+      countMap.set(sub, (countMap.get(sub) || 0) + 1);
+    });
+
+    const list = Array.from(countMap.entries())
+      .map(([submotivo, quantidadeRecusas]) => ({
+        submotivo,
+        quantidadeRecusas,
+        percentual: total > 0 ? (quantidadeRecusas / total) * 100 : 0,
+      }))
+      .sort((a, b) => b.quantidadeRecusas - a.quantidadeRecusas);
+
+    const max = list.length > 0 ? Math.max(...list.map((item) => item.quantidadeRecusas), 1) : 1;
+
+    return {
+      totalRecusas: total,
+      itens: list.map((item) => ({
+        ...item,
+        width: `${(item.quantidadeRecusas / max) * 100}%`,
+      })),
+    };
+  }, [filteredTabulacoes]);
+
   const limparFiltros = () => {
     setDataInicio('');
     setDataFim('');
@@ -368,6 +408,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
     ]);
     const dateStr = new Date().toISOString().split('T')[0];
     exportToCSV(`resumo_por_operador_${dateStr}.csv`, headers, rows);
+  };
+
+  const exportarRecusasSubmotivo = () => {
+    if (recusasSubmotivos.itens.length === 0) return;
+    const headers = [
+      '3. Submotivo Específico',
+      'Quantidade de Recusas',
+      '% do Total de Recusas',
+    ];
+    const rows = recusasSubmotivos.itens.map((linha) => [
+      linha.submotivo,
+      linha.quantidadeRecusas,
+      `${linha.percentual.toFixed(1)}%`,
+    ]);
+    const dateStr = new Date().toISOString().split('T')[0];
+    exportToCSV(`recusas_por_submotivo_${dateStr}.csv`, headers, rows);
   };
 
   return (
@@ -562,6 +618,133 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
           </div>
         </div>
 
+        {/* Nova Tabela de Recusas igual a 'Volume por unidade' com '3. Submotivo Específico' */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col justify-between">
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200 mb-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-800">
+                    Volume de Recusas por Submotivo
+                  </h3>
+                  <p className="text-[10px] text-slate-500 font-medium">3. Submotivo Específico</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                  {recusasSubmotivos.totalRecusas} recusa{recusasSubmotivos.totalRecusas === 1 ? '' : 's'}
+                </span>
+
+                {/* Alternador de visualização Barras / Tabela */}
+                <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setViewModeRecusas('barras')}
+                    className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                      viewModeRecusas === 'barras'
+                        ? 'bg-white text-rose-700 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                    title="Visualizar em barras (igual a Volume por unidade)"
+                  >
+                    Barras
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewModeRecusas('tabela')}
+                    className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                      viewModeRecusas === 'tabela'
+                        ? 'bg-white text-rose-700 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                    title="Visualizar em tabela detalhada"
+                  >
+                    Tabela
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={exportarRecusasSubmotivo}
+                  disabled={recusasSubmotivos.itens.length === 0}
+                  className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg border border-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  title="Exportar Recusas para CSV"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {recusasSubmotivos.itens.length > 0 ? (
+              viewModeRecusas === 'barras' ? (
+                <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+                  {recusasSubmotivos.itens.map((item) => (
+                    <div key={item.submotivo}>
+                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 mb-1">
+                        <span className="truncate pr-2 max-w-[220px] sm:max-w-[280px]" title={item.submotivo}>
+                          {item.submotivo}
+                        </span>
+                        <span className="shrink-0 font-bold text-slate-800">
+                          {item.quantidadeRecusas} <span className="text-slate-400 font-normal">({item.percentual.toFixed(1)}%)</span>
+                        </span>
+                      </div>
+                      <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-rose-500 to-red-500"
+                          style={{ width: item.width }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="overflow-x-auto max-h-[380px] overflow-y-auto border border-slate-100 rounded-xl">
+                  <table className="min-w-full divide-y divide-slate-200 text-left">
+                    <thead className="bg-slate-50 sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          3. Submotivo Específico
+                        </th>
+                        <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right">
+                          Recusas
+                        </th>
+                        <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right">
+                          %
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {recusasSubmotivos.itens.map((item) => (
+                        <tr key={item.submotivo} className="hover:bg-rose-50/40 transition-colors">
+                          <td className="px-3 py-2 text-xs font-semibold text-slate-800 break-words">
+                            {item.submotivo}
+                          </td>
+                          <td className="px-3 py-2 text-xs font-bold text-rose-700 text-right whitespace-nowrap">
+                            {item.quantidadeRecusas}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-slate-500 text-right whitespace-nowrap">
+                            {item.percentual.toFixed(1)}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            ) : (
+              <div className="text-sm text-slate-500 py-8 text-center flex flex-col items-center justify-center gap-1.5">
+                <AlertCircle className="w-5 h-5 text-slate-300" />
+                <span>Nenhuma recusa encontrada para os filtros selecionados.</span>
+                <span className="text-xs text-slate-400">Atendimentos de Negociação ou Informação não são contabilizados.</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
           <div className="flex items-center gap-2 pb-3 border-b border-slate-200 mb-4">
             <Users className="w-4 h-4 text-indigo-600" />
@@ -589,47 +772,47 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ tabulacoes, usuari
             )}
           </div>
         </div>
-      </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-        <div className="flex items-center gap-2 pb-3 border-b border-slate-200 mb-4">
-          <Percent className="w-4 h-4 text-amber-600" />
-          <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-800">Relação de renovação</h3>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-          <div>
-            <div className="flex justify-between text-xs font-bold text-slate-600 mb-2">
-              <span>Com renovação</span>
-              <span>{renovacaoStats.com}%</span>
-            </div>
-            <div className="h-3 w-full rounded-full bg-slate-100 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-500"
-                style={{ width: `${renovacaoStats.comPct}%` }}
-              />
-            </div>
-
-            <div className="flex justify-between text-xs font-bold text-slate-600 mt-4 mb-2">
-              <span>Sem renovação</span>
-              <span>{renovacaoStats.sem}%</span>
-            </div>
-            <div className="h-3 w-full rounded-full bg-slate-100 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
-                style={{ width: `${renovacaoStats.semPct}%` }}
-              />
-            </div>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+          <div className="flex items-center gap-2 pb-3 border-b border-slate-200 mb-4">
+            <Percent className="w-4 h-4 text-amber-600" />
+            <h3 className="text-sm font-black uppercase tracking-[0.14em] text-slate-800">Relação de renovação</h3>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700">Com renovação</div>
-              <div className="text-2xl font-black text-emerald-900 mt-2">{renovacaoStats.com}</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+            <div>
+              <div className="flex justify-between text-xs font-bold text-slate-600 mb-2">
+                <span>Com renovação</span>
+                <span>{renovacaoStats.com}%</span>
+              </div>
+              <div className="h-3 w-full rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-green-500"
+                  style={{ width: `${renovacaoStats.comPct}%` }}
+                />
+              </div>
+
+              <div className="flex justify-between text-xs font-bold text-slate-600 mt-4 mb-2">
+                <span>Sem renovação</span>
+                <span>{renovacaoStats.sem}%</span>
+              </div>
+              <div className="h-3 w-full rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
+                  style={{ width: `${renovacaoStats.semPct}%` }}
+                />
+              </div>
             </div>
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-700">Sem renovação</div>
-              <div className="text-2xl font-black text-amber-900 mt-2">{renovacaoStats.sem}</div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-700">Com renovação</div>
+                <div className="text-2xl font-black text-emerald-900 mt-2">{renovacaoStats.com}</div>
+              </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-700">Sem renovação</div>
+                <div className="text-2xl font-black text-amber-900 mt-2">{renovacaoStats.sem}</div>
+              </div>
             </div>
           </div>
         </div>

@@ -19,12 +19,18 @@ import {
   Activity,
   Radio,
   Eye,
-  EyeOff
+  EyeOff,
+  Search,
+  FileText,
+  Users,
+  HardDrive,
+  Trash2
 } from 'lucide-react';
 import { 
   SUPABASE_SQL_SCHEMA, 
   SUPABASE_SQL_CLEANUP, 
   SUPABASE_SQL_MIGRATION,
+  SUPABASE_SQL_MULTI_MATRICULA,
   SUPABASE_SQL_BASE_ATENDIMENTO,
   SUPABASE_SQL_RESET
 } from '../data/mockData';
@@ -41,6 +47,10 @@ import {
   saveTabulacaoSupabase,
   saveUsuarioSupabase,
   seedInitialDataToSupabase,
+  auditLocalVsRemote,
+  syncAlunosBatch,
+  syncTabulacoesBatch,
+  LocalAuditResult,
   DEFAULT_SUPABASE_URL,
   DEFAULT_SUPABASE_KEY
 } from '../lib/supabase';
@@ -52,6 +62,9 @@ interface SupabaseViewProps {
   usuarios?: Usuario[];
   baseAtendimento?: BaseAtendimentoItem[];
   onSyncFromSupabase?: (alunos: Aluno[], tabs: Tabulacao[], usrs: Usuario[], base?: BaseAtendimentoItem[]) => void;
+  onClearLocalRecords?: () => void;
+  onDeleteSingleLocalAluno?: (aluno: Aluno) => void;
+  onDeleteSingleLocalTabulacao?: (tab: Tabulacao) => void;
 }
 
 export const SupabaseView: React.FC<SupabaseViewProps> = ({
@@ -59,16 +72,20 @@ export const SupabaseView: React.FC<SupabaseViewProps> = ({
   tabulacoes = [],
   usuarios = [],
   baseAtendimento = [],
-  onSyncFromSupabase
+  onSyncFromSupabase,
+  onClearLocalRecords,
+  onDeleteSingleLocalAluno,
+  onDeleteSingleLocalTabulacao,
 }) => {
   const [copiedSql, setCopiedSql] = useState(false);
   const [copiedCleanupSql, setCopiedCleanupSql] = useState(false);
   const [copiedMigrationSql, setCopiedMigrationSql] = useState(false);
+  const [copiedMultiMatriculaSql, setCopiedMultiMatriculaSql] = useState(false);
   const [copiedBaseAtendimentoSql, setCopiedBaseAtendimentoSql] = useState(false);
   const [copiedResetSql, setCopiedResetSql] = useState(false);
   const [copiedClient, setCopiedClient] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'status' | 'sql' | 'client' | 'config'>('status');
-  const [activeSqlScript, setActiveSqlScript] = useState<'schema' | 'migration' | 'base_atendimento' | 'cleanup' | 'reset'>('schema');
+  const [activeSubTab, setActiveSubTab] = useState<'status' | 'sql' | 'local_diff' | 'client' | 'config'>('status');
+  const [activeSqlScript, setActiveSqlScript] = useState<'schema' | 'migration' | 'multi_matricula' | 'base_atendimento' | 'cleanup' | 'reset'>('schema');
 
   const [creds, setCreds] = useState(getSupabaseCredentials());
   const [inputUrl, setInputUrl] = useState(creds.url);
@@ -80,6 +97,132 @@ export const SupabaseView: React.FC<SupabaseViewProps> = ({
   const [isSeeding, setIsSeeding] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  // Local vs Supabase Audit State
+  const [auditResult, setAuditResult] = useState<LocalAuditResult | null>(null);
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [isSyncingLocal, setIsSyncingLocal] = useState(false);
+
+  const handleRunAudit = async () => {
+    setIsAuditing(true);
+    try {
+      const res = await auditLocalVsRemote(alunos, tabulacoes);
+      setAuditResult(res);
+    } catch (err: any) {
+      console.error('Erro na auditoria de dados locais:', err);
+    } finally {
+      setIsAuditing(false);
+    }
+  };
+
+  const handleSyncLocalOnly = async () => {
+    if (!auditResult) return;
+    setIsSyncingLocal(true);
+    setActionMessage({ type: 'info', text: 'Enviando registros salvos localmente para o Supabase...' });
+    try {
+      let syncedAlunos = 0;
+      let syncedTabs = 0;
+      const errors: string[] = [];
+
+      if (auditResult.localOnlyAlunos.length > 0) {
+        const aRes = await syncAlunosBatch(auditResult.localOnlyAlunos);
+        syncedAlunos = aRes.successCount;
+        if (aRes.errors.length > 0) errors.push(...aRes.errors);
+      }
+
+      if (auditResult.localOnlyTabulacoes.length > 0) {
+        const tRes = await syncTabulacoesBatch(auditResult.localOnlyTabulacoes);
+        syncedTabs = tRes.successCount;
+        if (tRes.errors.length > 0) errors.push(...tRes.errors);
+      }
+
+      if (errors.length > 0 && syncedAlunos === 0 && syncedTabs === 0) {
+        setActionMessage({ type: 'error', text: `Erro na sincronização: ${errors[0]}` });
+      } else {
+        setActionMessage({
+          type: 'success',
+          text: `Sincronização concluída com sucesso! Enviados: ${syncedAlunos} alunos e ${syncedTabs} tabulações para o banco Supabase.`
+        });
+        await handleRunAudit();
+        runHealthCheck();
+      }
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err?.message || 'Falha ao sincronizar' });
+    } finally {
+      setIsSyncingLocal(false);
+    }
+  };
+
+  const handleSyncSingleAluno = async (aluno: Aluno) => {
+    setActionMessage({ type: 'info', text: `Sincronizando aluno ${aluno.nome}...` });
+    try {
+      const res = await saveAlunoSupabase(aluno);
+      if (res.error) {
+        setActionMessage({ type: 'error', text: `Erro ao sincronizar: ${res.error}` });
+      } else {
+        setActionMessage({ type: 'success', text: `Aluno ${aluno.nome} (${aluno.matricula}) sincronizado com sucesso no Supabase!` });
+        await handleRunAudit();
+      }
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err?.message || 'Falha ao sincronizar aluno' });
+    }
+  };
+
+  const handleSyncSingleTabulacao = async (tab: Tabulacao) => {
+    setActionMessage({ type: 'info', text: `Sincronizando tabulação ${tab.protocolo}...` });
+    try {
+      const res = await saveTabulacaoSupabase(tab);
+      if (res.error) {
+        setActionMessage({ type: 'error', text: `Erro ao sincronizar: ${res.error}` });
+      } else {
+        setActionMessage({ type: 'success', text: `Tabulação ${tab.protocolo} sincronizada com sucesso no Supabase!` });
+        await handleRunAudit();
+      }
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err?.message || 'Falha ao sincronizar tabulação' });
+    }
+  };
+
+  const handleRemoveAllLocalRecords = async () => {
+    if (window.confirm('Deseja realmente remover os registros salvos apenas localmente? Esta ação excluirá os dados mock e rascunhos locais deste navegador, mantendo o sistema estritamente alinhado com o Supabase.')) {
+      if (onClearLocalRecords) {
+        onClearLocalRecords();
+      }
+      setActionMessage({
+        type: 'success',
+        text: 'Todos os registros salvos apenas localmente foram removidos com sucesso! O estado local agora está limpo e espelhado no Supabase.'
+      });
+      setTimeout(() => {
+        handleRunAudit();
+      }, 300);
+    }
+  };
+
+  const handleRemoveSingleAluno = (aluno: Aluno) => {
+    if (onDeleteSingleLocalAluno) {
+      onDeleteSingleLocalAluno(aluno);
+      setActionMessage({
+        type: 'info',
+        text: `Registro local de ${aluno.nome} removido do navegador.`
+      });
+      setTimeout(() => {
+        handleRunAudit();
+      }, 300);
+    }
+  };
+
+  const handleRemoveSingleTabulacao = (tab: Tabulacao) => {
+    if (onDeleteSingleLocalTabulacao) {
+      onDeleteSingleLocalTabulacao(tab);
+      setActionMessage({
+        type: 'info',
+        text: `Tabulação local ${tab.protocolo} removida do navegador.`
+      });
+      setTimeout(() => {
+        handleRunAudit();
+      }, 300);
+    }
+  };
 
   const runHealthCheck = async () => {
     setIsCheckingHealth(true);
@@ -118,6 +261,12 @@ export const SupabaseView: React.FC<SupabaseViewProps> = ({
     navigator.clipboard.writeText(SUPABASE_SQL_MIGRATION);
     setCopiedMigrationSql(true);
     setTimeout(() => setCopiedMigrationSql(false), 2500);
+  };
+
+  const handleCopyMultiMatriculaSql = () => {
+    navigator.clipboard.writeText(SUPABASE_SQL_MULTI_MATRICULA);
+    setCopiedMultiMatriculaSql(true);
+    setTimeout(() => setCopiedMultiMatriculaSql(false), 2500);
   };
 
   const handleCopyBaseAtendimentoSql = () => {
@@ -540,6 +689,30 @@ export async function importarLoteBaseAtendimento(items: Array<{
           <Layers className="w-4 h-4" />
           4. Código do Cliente SDK
         </button>
+
+        <button
+          onClick={() => {
+            setActiveSubTab('local_diff');
+            handleRunAudit();
+          }}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+            activeSubTab === 'local_diff'
+              ? 'bg-amber-600 text-white shadow-sm font-black'
+              : 'text-amber-700 bg-amber-50 hover:bg-amber-100/80 border border-amber-200/60'
+          }`}
+        >
+          <Search className="w-4 h-4" />
+          5. Salvos Apenas Localmente
+          {auditResult && auditResult.totalPending > 0 ? (
+            <span className="ml-1 px-2 py-0.5 bg-amber-400 text-slate-950 font-black rounded-full text-[10px] animate-pulse">
+              {auditResult.totalPending} pendentes
+            </span>
+          ) : (
+            <span className="ml-1 px-1.5 py-0.5 bg-amber-200/60 text-amber-900 font-semibold rounded text-[10px]">
+              Verificar
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Tab 1: Painel de Sincronização & Testes */}
@@ -617,6 +790,30 @@ export async function importarLoteBaseAtendimento(items: Array<{
                 </button>
               </div>
 
+            </div>
+
+            {/* Quick Action to Local Only Audit */}
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-300/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-1.5 text-xs font-black text-amber-900">
+                  <Search className="w-4 h-4 text-amber-700" />
+                  <span>Verificar registros salvos apenas no seu navegador</span>
+                </div>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Consulte a lista detalhada de alunos e atendimentos que existem localmente e envie-os para o Supabase com 1 clique.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveSubTab('local_diff');
+                  handleRunAudit();
+                }}
+                className="inline-flex items-center gap-2 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs shrink-0 cursor-pointer"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>Ver Salvos Localmente</span>
+              </button>
             </div>
 
             {/* Guide Step-by-Step */}
@@ -713,7 +910,18 @@ export async function importarLoteBaseAtendimento(items: Array<{
                     : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
               >
-                2. Migração Rápida (Novas Colunas)
+                2. Migração Geral (Colunas Novas)
+              </button>
+
+              <button
+                onClick={() => setActiveSqlScript('multi_matricula')}
+                className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  activeSqlScript === 'multi_matricula'
+                    ? 'bg-cyan-600 text-white shadow-md shadow-cyan-950'
+                    : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                3. Múltiplas Matrículas (alunos_cpf_key)
               </button>
 
               <button
@@ -724,7 +932,7 @@ export async function importarLoteBaseAtendimento(items: Array<{
                     : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
               >
-                3. Tabela Base de Atendimento (Nova)
+                4. Tabela Base Atendimento
               </button>
 
               <button
@@ -735,7 +943,7 @@ export async function importarLoteBaseAtendimento(items: Array<{
                     : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
               >
-                4. Limpar Colunas Antigas (DROP)
+                5. Limpar Colunas Antigas
               </button>
 
               <button
@@ -746,7 +954,7 @@ export async function importarLoteBaseAtendimento(items: Array<{
                     : 'bg-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
               >
-                5. Reset / Recriação Completa (DROP & RECREATE)
+                6. Reset Total
               </button>
             </div>
 
@@ -768,6 +976,16 @@ export async function importarLoteBaseAtendimento(items: Array<{
               >
                 {copiedMigrationSql ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4" />}
                 {copiedMigrationSql ? 'Script Copiado!' : 'Copiar Script de Migração'}
+              </button>
+            )}
+
+            {activeSqlScript === 'multi_matricula' && (
+              <button
+                onClick={handleCopyMultiMatriculaSql}
+                className="text-xs font-bold text-white flex items-center gap-1.5 bg-cyan-600 hover:bg-cyan-500 px-4 py-2.5 rounded-xl transition-all cursor-pointer shadow-lg shadow-cyan-950/50"
+              >
+                {copiedMultiMatriculaSql ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4" />}
+                {copiedMultiMatriculaSql ? 'Script Copiado!' : 'Copiar Script Múltiplas Matrículas'}
               </button>
             )}
 
@@ -822,6 +1040,15 @@ export async function importarLoteBaseAtendimento(items: Array<{
               </div>
             )}
 
+            {activeSqlScript === 'multi_matricula' && (
+              <div className="p-3.5 bg-cyan-950/40 border border-cyan-900/60 rounded-xl text-xs text-cyan-200 flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-cyan-300">Ajuste de Múltiplas Matrículas por Aluno (Tabela Alunos):</strong> Remove a restrição única antiga <code className="text-cyan-200 font-mono">alunos_cpf_key</code> e adiciona a chave composta <code className="text-cyan-200 font-mono">alunos_cpf_matricula_key (cpf, matricula)</code>. Isso permite cadastrar várias matrículas para o mesmo aluno sem erro de duplicidade.
+                </div>
+              </div>
+            )}
+
             {activeSqlScript === 'base_atendimento' && (
               <div className="p-3.5 bg-amber-950/40 border border-amber-900/60 rounded-xl text-xs text-amber-200 flex items-start gap-2.5">
                 <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
@@ -855,6 +1082,7 @@ export async function importarLoteBaseAtendimento(items: Array<{
             <pre className="p-6 text-xs font-mono overflow-x-auto text-emerald-300/90 leading-relaxed max-h-[600px] bg-slate-950/90 rounded-2xl border border-slate-800/80">
               {activeSqlScript === 'schema' && SUPABASE_SQL_SCHEMA}
               {activeSqlScript === 'migration' && SUPABASE_SQL_MIGRATION}
+              {activeSqlScript === 'multi_matricula' && SUPABASE_SQL_MULTI_MATRICULA}
               {activeSqlScript === 'base_atendimento' && SUPABASE_SQL_BASE_ATENDIMENTO}
               {activeSqlScript === 'cleanup' && SUPABASE_SQL_CLEANUP}
               {activeSqlScript === 'reset' && SUPABASE_SQL_RESET}
@@ -956,6 +1184,334 @@ export async function importarLoteBaseAtendimento(items: Array<{
           <pre className="p-6 text-xs font-mono overflow-x-auto text-blue-300/90 leading-relaxed max-h-[550px] bg-slate-950/70">
             {clientSnippet}
           </pre>
+        </div>
+      )}
+
+      {/* Tab 5: Dados Salvos Apenas Localmente (Auditoria e Sincronização) */}
+      {activeSubTab === 'local_diff' && (
+        <div className="space-y-6">
+          
+          {/* Header da Auditoria */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-7 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                    Auditoria em Tempo Real
+                  </span>
+                  <span className="text-xs text-slate-400">Navegador vs Banco Nuvem</span>
+                </div>
+                <h3 className="text-lg font-black text-slate-900 mt-1">
+                  Registros Salvos Apenas Localmente
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5 max-w-2xl leading-relaxed">
+                  Lista detalhada de cadastros que residem no armazenamento do seu navegador (localStorage / memória) e ainda não constam nas tabelas do Supabase.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleRunAudit}
+                  disabled={isAuditing}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isAuditing ? 'animate-spin' : ''}`} />
+                  {isAuditing ? 'Analisando...' : 'Reanalisar'}
+                </button>
+
+                {auditResult && auditResult.totalPending > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleSyncLocalOnly}
+                      disabled={isSyncingLocal}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                    >
+                      <UploadCloud className={`w-4 h-4 ${isSyncingLocal ? 'animate-bounce' : ''}`} />
+                      {isSyncingLocal ? 'Sincronizando...' : `Sincronizar Todos (${auditResult.totalPending}) com Supabase`}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleRemoveAllLocalRecords}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 text-xs font-black rounded-xl transition-all shadow-2xs cursor-pointer"
+                      title="Apagar dados locais e manter apenas o banco de dados Supabase"
+                    >
+                      <Trash2 className="w-4 h-4 text-rose-600" />
+                      Remover Registros Locais ({auditResult.totalPending})
+                    </button>
+                  </>
+                )}
+
+                {(!auditResult || auditResult.totalPending === 0) && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveAllLocalRecords}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 text-slate-600 text-xs font-bold rounded-xl transition-all cursor-pointer border border-transparent"
+                    title="Limpar resíduos locais do navegador"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Limpar Dados Salvos Localmente
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Contadores */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-800">Alunos Salvos Localmente</span>
+                  <Users className="w-4 h-4 text-amber-600" />
+                </div>
+                <div className="text-2xl font-black text-amber-950">
+                  {isAuditing ? '...' : auditResult ? auditResult.localOnlyAlunos.length : 0}
+                </div>
+                <p className="text-[11px] text-amber-700">Não encontrados na tabela 'alunos' do Supabase</p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-indigo-800">Tabulações Locais</span>
+                  <FileText className="w-4 h-4 text-indigo-600" />
+                </div>
+                <div className="text-2xl font-black text-indigo-950">
+                  {isAuditing ? '...' : auditResult ? auditResult.localOnlyTabulacoes.length : 0}
+                </div>
+                <p className="text-[11px] text-indigo-700">Protocolos pendentes de envio à nuvem</p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700">Alunos em Atendimentos</span>
+                  <HardDrive className="w-4 h-4 text-slate-500" />
+                </div>
+                <div className="text-2xl font-black text-slate-900">
+                  {isAuditing ? '...' : auditResult ? auditResult.tabAlunosMissingInAlunosTable.length : 0}
+                </div>
+                <p className="text-[11px] text-slate-500">Registrados em chamadas sem cadastro prévio</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Se a auditoria ainda não foi executada */}
+          {!auditResult && !isAuditing && (
+            <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 space-y-3">
+              <Search className="w-10 h-10 text-slate-300 mx-auto" />
+              <h4 className="text-sm font-bold text-slate-700">Pronto para auditar</h4>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Clique no botão abaixo para comparar todos os dados locais com o Supabase e descobrir o que ainda não subiu para a nuvem.
+              </p>
+              <button
+                type="button"
+                onClick={handleRunAudit}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Executar Auditoria Agora
+              </button>
+            </div>
+          )}
+
+          {/* Se está tudo sincronizado */}
+          {auditResult && auditResult.totalPending === 0 && (
+            <div className="p-8 text-center bg-emerald-50 rounded-3xl border border-emerald-200 space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-sm">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <h4 className="text-base font-black text-emerald-950">
+                Tudo 100% Sincronizado com o Supabase!
+              </h4>
+              <p className="text-xs text-emerald-800 max-w-lg mx-auto leading-relaxed">
+                Não há nenhum aluno ou tabulação salvo exclusivamente de forma local. Todos os registros estão devidamente gravados e protegidos no banco de dados na nuvem.
+              </p>
+            </div>
+          )}
+
+          {/* LISTA 1: Alunos Salvos Apenas Localmente */}
+          {auditResult && auditResult.localOnlyAlunos.length > 0 && (
+            <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs space-y-4 p-6">
+              <div className="flex items-center justify-between flex-wrap gap-2 border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-700 flex items-center justify-center font-bold text-xs">
+                    {auditResult.localOnlyAlunos.length}
+                  </div>
+                  <h4 className="text-sm font-black text-slate-900">
+                    Alunos e Matrículas Salvos Apenas no Navegador
+                  </h4>
+                </div>
+                <span className="text-xs text-amber-700 font-semibold bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                  Pronto para subir ao Supabase
+                </span>
+              </div>
+
+              <div className="divide-y divide-slate-100">
+                {auditResult.localOnlyAlunos.map((aluno, idx) => (
+                  <div key={aluno.id || idx} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 px-2 rounded-xl transition-all">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-slate-900">{aluno.nome}</span>
+                        <span className="text-[11px] font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                          CPF: {aluno.cpf}
+                        </span>
+                        <span className="text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                          Matrícula: {aluno.matricula || aluno.ra || 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] text-slate-500 flex-wrap">
+                        {aluno.email && <span>✉ {aluno.email}</span>}
+                        {aluno.telefone && <span>📞 {aluno.telefone}</span>}
+                        <span className="text-amber-600 font-medium">● Armazenado apenas localmente</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleSyncSingleAluno(aluno)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-all shrink-0 cursor-pointer shadow-2xs"
+                      >
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        Subir para Supabase
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSingleAluno(aluno)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-lg border border-rose-200 transition-all shrink-0 cursor-pointer"
+                        title="Remover apenas deste navegador"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                        Remover
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* LISTA 2: Tabulações Salvas Apenas Localmente */}
+          {auditResult && auditResult.localOnlyTabulacoes.length > 0 && (
+            <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs space-y-4 p-6">
+              <div className="flex items-center justify-between flex-wrap gap-2 border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-700 flex items-center justify-center font-bold text-xs">
+                    {auditResult.localOnlyTabulacoes.length}
+                  </div>
+                  <h4 className="text-sm font-black text-slate-900">
+                    Tabulações Salvas Apenas no Navegador
+                  </h4>
+                </div>
+                <span className="text-xs text-indigo-700 font-semibold bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200">
+                  Pendentes de Envio
+                </span>
+              </div>
+
+              <div className="divide-y divide-slate-100">
+                {auditResult.localOnlyTabulacoes.map((tab, idx) => (
+                  <div key={tab.id || idx} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 px-2 rounded-xl transition-all">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-mono font-bold text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                          {tab.protocolo}
+                        </span>
+                        <span className="text-xs font-bold text-slate-900">{tab.alunoNome}</span>
+                        <span className="text-[11px] text-slate-500">CPF: {tab.alunoCpf}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] text-slate-500 flex-wrap">
+                        <span>Operador: {tab.atendenteNome}</span>
+                        <span>Motivo: {tab.categoriaMotivo}</span>
+                        <span>Data: {tab.dataHora}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleSyncSingleTabulacao(tab)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-all shrink-0 cursor-pointer shadow-2xs"
+                      >
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        Subir para Supabase
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSingleTabulacao(tab)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-lg border border-rose-200 transition-all shrink-0 cursor-pointer"
+                        title="Remover apenas deste navegador"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                        Remover
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* LISTA 3: Alunos presentes em Tabulações sem Registro na Tabela Alunos */}
+          {auditResult && auditResult.tabAlunosMissingInAlunosTable.length > 0 && (
+            <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs space-y-4 p-6">
+              <div className="flex items-center justify-between flex-wrap gap-2 border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs">
+                    {auditResult.tabAlunosMissingInAlunosTable.length}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900">
+                      Alunos em Tabulações que não constam na Tabela 'alunos'
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Foram atendidos e tabulados, mas não possuem linha própria cadastrada na tabela alunos do Supabase.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto pr-1">
+                {auditResult.tabAlunosMissingInAlunosTable.map((item, idx) => (
+                  <div key={idx} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50/50 px-2 rounded-xl transition-all">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-slate-900">{item.nome}</span>
+                        <span className="text-[11px] font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                          CPF: {item.cpf}
+                        </span>
+                        <span className="text-[11px] font-mono text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                          Matrícula: {item.matricula}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        Último atendimento: {item.lastProtocolo} {item.unidade ? `• Unidade: ${item.unidade}` : ''}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleSyncSingleAluno({
+                          id: '',
+                          nome: item.nome,
+                          cpf: item.cpf,
+                          matricula: item.matricula,
+                          email: item.email || '',
+                          telefone: item.telefone || '',
+                          dataCadastro: new Date().toISOString(),
+                        })
+                      }
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-all shrink-0 cursor-pointer"
+                    >
+                      <UploadCloud className="w-3 h-3" />
+                      Cadastrar no Supabase
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
       )}
 

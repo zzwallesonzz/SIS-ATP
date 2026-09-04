@@ -269,13 +269,14 @@ export async function fetchAlunosSupabase(forceRefresh = false): Promise<{ data:
 }
 
 /**
- * Searches a student directly in Supabase by CPF, checking multiple formatting variations
+ * Searches students directly in Supabase by CPF, checking multiple formatting variations
  * (e.g. "03964199257", "3964199257", "039.641.992-57", "39.641.992-57")
+ * Returns all matching records (multiple matriculas for the same CPF)
  */
-export async function searchAlunoByCpfSupabase(rawCpf: string): Promise<{ data: Aluno | null; error: string | null }> {
+export async function searchAlunosByCpfSupabase(rawCpf: string): Promise<{ data: Aluno[] | null; error: string | null }> {
   try {
     const digits = cleanDigits(rawCpf);
-    if (!digits) return { data: null, error: null };
+    if (!digits) return { data: [], error: null };
 
     const padded = normalizeCpf(digits);
     const unpadded = digits.replace(/^0+/, '');
@@ -291,131 +292,204 @@ export async function searchAlunoByCpfSupabase(rawCpf: string): Promise<{ data: 
     const { data, error } = await supabase
       .from('alunos')
       .select('*')
-      .or(filterQuery)
-      .limit(1);
+      .or(filterQuery);
 
     if (error) {
-      console.warn('Busca direta de aluno no Supabase retornou aviso/erro:', error.message);
+      console.warn('Busca direta de alunos no Supabase retornou aviso/erro:', error.message);
       return { data: null, error: error.message };
     }
 
     if (data && data.length > 0) {
-      const row = data[0];
-      const aluno: Aluno = {
+      const list: Aluno[] = data.map((row: any) => ({
         id: row.id,
         cpf: formatCompleteCPF(String(row.cpf || '')),
         nome: row.nome,
         matricula: row.matricula,
         email: row.email,
         telefone: row.telefone,
-        ra: row.ra || '',
+        ra: row.ra || row.matricula || '',
         curso: row.curso || '',
         polo: row.polo || '',
         statusAcademico: row.status_academico || 'ATIVO',
         dataCadastro: row.data_cadastro || new Date().toISOString(),
-      };
-      return { data: aluno, error: null };
+      }));
+      return { data: list, error: null };
     }
 
-    return { data: null, error: null };
+    return { data: [], error: null };
   } catch (err: any) {
-    return { data: null, error: err?.message || 'Erro ao consultar aluno por CPF' };
+    return { data: null, error: err?.message || 'Erro ao consultar alunos por CPF' };
   }
+}
+
+/**
+ * Backward-compatible single-aluno search (returns first match if any)
+ */
+export async function searchAlunoByCpfSupabase(rawCpf: string): Promise<{ data: Aluno | null; error: string | null }> {
+  const res = await searchAlunosByCpfSupabase(rawCpf);
+  if (res.error) return { data: null, error: res.error };
+  return { data: res.data && res.data.length > 0 ? res.data[0] : null, error: null };
 }
 
 export async function saveAlunoSupabase(aluno: Aluno): Promise<{ data: Aluno | null; error: string | null }> {
   try {
     const formattedCpf = formatCompleteCPF(aluno.cpf);
-    const payload: any = {
+    const unmaskedCpf = cleanDigits(aluno.cpf);
+    const matriculaVal = (aluno.matricula || aluno.ra || '').trim();
+
+    // 1. Prepare candidate payloads
+    const fullPayload: any = {
       cpf: formattedCpf,
-      nome: aluno.nome,
-      matricula: aluno.matricula,
-      email: aluno.email,
-      telefone: aluno.telefone,
-      ra: aluno.ra || null,
+      nome: aluno.nome.trim(),
+      matricula: matriculaVal,
+      email: aluno.email.trim(),
+      telefone: aluno.telefone.trim(),
+      ra: aluno.ra || matriculaVal || null,
       curso: aluno.curso || null,
       polo: aluno.polo || null,
       status_academico: aluno.statusAcademico || 'ATIVO',
       data_cadastro: aluno.dataCadastro || getSaoPauloISOString(),
     };
 
+    // If ID is valid UUID, keep it, otherwise omit to let Postgres generate gen_random_uuid()
     if (isValidUUID(aluno.id)) {
-      payload.id = aluno.id;
+      fullPayload.id = aluno.id;
     }
 
-    let currentPayload = { ...payload };
-    let finalData: any = null;
-    let lastError: any = null;
+    // Helper to map returning Supabase row
+    const mapResult = (row: any): Aluno => ({
+      id: row.id,
+      cpf: formatCompleteCPF(String(row.cpf || '')),
+      nome: row.nome,
+      matricula: row.matricula,
+      email: row.email,
+      telefone: row.telefone,
+      ra: row.ra || '',
+      curso: row.curso || '',
+      polo: row.polo || '',
+      statusAcademico: row.status_academico || 'ATIVO',
+      dataCadastro: row.data_cadastro || aluno.dataCadastro || getSaoPauloISOString(),
+    });
 
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const { data, error } = await supabase
+    // 1. If updating an existing record with valid UUID
+    if (isValidUUID(aluno.id)) {
+      const { data: updated, error: updErr } = await supabase
         .from('alunos')
-        .upsert(currentPayload, { onConflict: 'cpf' })
+        .update(fullPayload)
+        .eq('id', aluno.id)
         .select()
-        .single();
+        .maybeSingle();
 
-      if (!error && data) {
-        finalData = data;
-        lastError = null;
-        break;
+      if (!updErr && updated) {
+        return { data: mapResult(updated), error: null };
       }
-
-      lastError = error;
-      const errMsg = error?.message || '';
-      console.warn(`Tentativa ${attempt + 1} de salvar aluno no Supabase retornou:`, errMsg);
-
-      if (errMsg.includes('status_academico') && 'status_academico' in currentPayload) {
-        delete currentPayload.status_academico;
-        continue;
-      }
-      if (errMsg.includes('ra') && 'ra' in currentPayload) {
-        delete currentPayload.ra;
-        continue;
-      }
-      if (errMsg.includes('curso') && 'curso' in currentPayload) {
-        delete currentPayload.curso;
-        continue;
-      }
-      if (errMsg.includes('polo') && 'polo' in currentPayload) {
-        delete currentPayload.polo;
-        continue;
-      }
-      if (errMsg.includes('data_cadastro') && 'data_cadastro' in currentPayload) {
-        delete currentPayload.data_cadastro;
-        continue;
-      }
-
-      const colMatch = errMsg.match(/column "([^"]+)" of relation "alunos" does not exist/) ||
-                       errMsg.match(/Could not find the '([^']+)' column of 'alunos'/);
-      if (colMatch && colMatch[1] && colMatch[1] in currentPayload) {
-        delete currentPayload[colMatch[1]];
-        continue;
-      }
-
-      break;
     }
 
-    if (lastError || !finalData) {
-      return { data: null, error: lastError?.message || 'Erro ao salvar aluno no Supabase' };
+    // 2. Check if a record already exists with the same CPF AND same Matrícula
+    const { data: existingSameMatricula } = await supabase
+      .from('alunos')
+      .select('id')
+      .or(`cpf.eq.${formattedCpf},cpf.eq.${unmaskedCpf}`)
+      .eq('matricula', matriculaVal)
+      .maybeSingle();
+
+    if (existingSameMatricula?.id) {
+      const { data: updated, error: updErr } = await supabase
+        .from('alunos')
+        .update(fullPayload)
+        .eq('id', existingSameMatricula.id)
+        .select()
+        .maybeSingle();
+
+      if (!updErr && updated) {
+        return { data: mapResult(updated), error: null };
+      }
     }
 
-    const savedAluno: Aluno = {
-      id: finalData.id,
-      cpf: formatCompleteCPF(String(finalData.cpf || '')),
-      nome: finalData.nome,
-      matricula: finalData.matricula,
-      email: finalData.email,
-      telefone: finalData.telefone,
-      ra: finalData.ra || '',
-      curso: finalData.curso || '',
-      polo: finalData.polo || '',
-      statusAcademico: finalData.status_academico || 'ATIVO',
-      dataCadastro: finalData.data_cadastro || aluno.dataCadastro,
-    };
+    // 3. New record insertion (delete id if not valid UUID)
+    const insertPayload = { ...fullPayload };
+    if (!isValidUUID(insertPayload.id)) {
+      delete insertPayload.id;
+    }
 
-    return { data: savedAluno, error: null };
+    // Attempt 1: Full payload
+    let { data: inserted, error: insertError } = await supabase
+      .from('alunos')
+      .insert(insertPayload)
+      .select()
+      .maybeSingle();
+
+    // Attempt 2: If failed due to extra columns (e.g. curso, polo, status_academico, etc. not in table)
+    if (insertError && (
+      insertError.code === 'PGRST204' || 
+      insertError.message.includes('column') || 
+      insertError.message.includes('does not exist')
+    )) {
+      console.warn('Tentando inserção com colunas básicas na tabela alunos...', insertError.message);
+      const minimalPayload = {
+        cpf: formattedCpf,
+        nome: aluno.nome.trim(),
+        matricula: matriculaVal,
+        email: aluno.email.trim(),
+        telefone: aluno.telefone.trim(),
+      };
+      const retryRes = await supabase
+        .from('alunos')
+        .insert(minimalPayload)
+        .select()
+        .maybeSingle();
+      
+      inserted = retryRes.data;
+      insertError = retryRes.error;
+    }
+
+    // Attempt 3: If failed due to CPF format length (e.g. column is VARCHAR(11))
+    if (insertError && insertError.message.includes('value too long')) {
+      console.warn('Tentando inserção com CPF numérico (sem máscara)...', insertError.message);
+      const unmaskedPayload = {
+        cpf: unmaskedCpf,
+        nome: aluno.nome.trim(),
+        matricula: matriculaVal,
+        email: aluno.email.trim(),
+        telefone: aluno.telefone.trim(),
+      };
+      const retryRes = await supabase
+        .from('alunos')
+        .insert(unmaskedPayload)
+        .select()
+        .maybeSingle();
+      
+      inserted = retryRes.data;
+      insertError = retryRes.error;
+    }
+
+    if (!insertError && inserted) {
+      // Invalidate cache so fresh student appears in queries
+      alunosCache = null;
+      return { data: mapResult(inserted), error: null };
+    }
+
+    // Check if insertion was rejected by legacy unique constraint on CPF
+    if (
+      insertError?.message?.includes('alunos_cpf_key') ||
+      insertError?.message?.includes('violates unique constraint') ||
+      insertError?.code === '23505'
+    ) {
+      console.error('Falha de restrição única no Supabase (alunos_cpf_key):', insertError);
+      return {
+        data: null,
+        error:
+          'O banco de dados Supabase rejeitou o cadastro pois a tabela "alunos" ainda possui a restrição antiga de CPF único ("alunos_cpf_key"). ' +
+          'Para permitir mais de uma matrícula para o mesmo CPF, execute no SQL Editor do Supabase o comando: ' +
+          'ALTER TABLE public.alunos DROP CONSTRAINT IF EXISTS alunos_cpf_key; ' +
+          'ALTER TABLE public.alunos ADD CONSTRAINT alunos_cpf_matricula_key UNIQUE (cpf, matricula);',
+      };
+    }
+
+    return { data: null, error: insertError?.message || 'Erro ao salvar aluno no Supabase' };
   } catch (err: any) {
-    return { data: null, error: err?.message || 'Erro ao salvar aluno' };
+    console.error('Exceção ao salvar aluno no Supabase:', err);
+    return { data: null, error: err?.message || 'Erro ao sincronizar aluno' };
   }
 }
 
@@ -1236,5 +1310,177 @@ export function subscribeToDatabaseChanges(
       }
     },
   };
+}
+
+// ------------------------------------------------------------------
+// AUDITORIA E SINCRONIZAÇÃO DE DADOS LOCAIS VS SUPABASE
+// ------------------------------------------------------------------
+export interface LocalAuditResult {
+  localOnlyAlunos: Aluno[];
+  localOnlyTabulacoes: Tabulacao[];
+  tabAlunosMissingInAlunosTable: Array<{
+    cpf: string;
+    nome: string;
+    matricula: string;
+    unidade?: string;
+    telefone?: string;
+    email?: string;
+    lastProtocolo: string;
+  }>;
+  totalPending: number;
+}
+
+/**
+ * Compara os registros locais (memória/localStorage) com o Supabase
+ * e identifica exatamente o que está salvo apenas localmente.
+ */
+export async function auditLocalVsRemote(
+  localAlunos: Aluno[],
+  localTabulacoes: Tabulacao[]
+): Promise<LocalAuditResult> {
+  const localOnlyAlunos: Aluno[] = [];
+  const localOnlyTabulacoes: Tabulacao[] = [];
+  const tabAlunosMissingInAlunosTable: Array<{
+    cpf: string;
+    nome: string;
+    matricula: string;
+    unidade?: string;
+    telefone?: string;
+    email?: string;
+    lastProtocolo: string;
+  }> = [];
+
+  try {
+    // 1. Verifica quais Alunos Locais NÃO existem no Supabase
+    if (localAlunos && localAlunos.length > 0) {
+      for (const a of localAlunos) {
+        const digits = cleanDigits(a.cpf);
+        const mat = (a.matricula || a.ra || '').trim();
+        const formatted = formatCompleteCPF(digits);
+
+        const { data, error } = await supabase
+          .from('alunos')
+          .select('id, cpf, matricula')
+          .or(`cpf.eq.${formatted},cpf.eq.${digits}`)
+          .eq('matricula', mat)
+          .maybeSingle();
+
+        if (error || !data) {
+          localOnlyAlunos.push(a);
+        }
+      }
+    }
+
+    // 2. Verifica quais Tabulações Locais NÃO existem no Supabase
+    if (localTabulacoes && localTabulacoes.length > 0) {
+      const protocols = localTabulacoes.map((t) => t.protocolo).filter(Boolean);
+      // Consulta em lotes de 50
+      const CHUNK = 50;
+      const remoteFoundProtocols = new Set<string>();
+
+      for (let i = 0; i < protocols.length; i += CHUNK) {
+        const slice = protocols.slice(i, i + CHUNK);
+        const { data } = await supabase
+          .from('tabulacoes')
+          .select('protocolo')
+          .in('protocolo', slice);
+
+        if (data) {
+          data.forEach((r: any) => remoteFoundProtocols.add(r.protocolo));
+        }
+      }
+
+      for (const t of localTabulacoes) {
+        if (!remoteFoundProtocols.has(t.protocolo)) {
+          localOnlyTabulacoes.push(t);
+        }
+      }
+    }
+
+    // 3. Verifica se nas tabulações recentes existem alunos não cadastrados na tabela 'alunos'
+    const recentTabs = localTabulacoes.slice(0, 50);
+    const checkedKeys = new Set<string>();
+
+    for (const t of recentTabs) {
+      const digits = cleanDigits(t.alunoCpf);
+      const mat = (t.alunoRa || '').trim();
+      const key = `${digits}|${mat}`;
+
+      if (digits && mat && !checkedKeys.has(key)) {
+        checkedKeys.add(key);
+        const formatted = formatCompleteCPF(digits);
+
+        const { data } = await supabase
+          .from('alunos')
+          .select('id')
+          .or(`cpf.eq.${formatted},cpf.eq.${digits}`)
+          .eq('matricula', mat)
+          .maybeSingle();
+
+        if (!data) {
+          tabAlunosMissingInAlunosTable.push({
+            cpf: formatted,
+            nome: t.alunoNome,
+            matricula: mat,
+            unidade: t.unidade,
+            telefone: t.alunoTelefone,
+            email: t.alunoEmail,
+            lastProtocolo: t.protocolo,
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Erro na auditoria de dados locais vs Supabase:', err);
+  }
+
+  return {
+    localOnlyAlunos,
+    localOnlyTabulacoes,
+    tabAlunosMissingInAlunosTable,
+    totalPending: localOnlyAlunos.length + localOnlyTabulacoes.length,
+  };
+}
+
+/**
+ * Envia uma lista de alunos locais pendentes para o Supabase
+ */
+export async function syncAlunosBatch(
+  alunosToSync: Aluno[]
+): Promise<{ successCount: number; errors: string[] }> {
+  let successCount = 0;
+  const errors: string[] = [];
+
+  for (const a of alunosToSync) {
+    const res = await saveAlunoSupabase(a);
+    if (res.error) {
+      errors.push(`${a.nome} (${a.matricula}): ${res.error}`);
+    } else {
+      successCount++;
+    }
+  }
+
+  return { successCount, errors };
+}
+
+/**
+ * Envia uma lista de tabulações locais pendentes para o Supabase
+ */
+export async function syncTabulacoesBatch(
+  tabsToSync: Tabulacao[]
+): Promise<{ successCount: number; errors: string[] }> {
+  let successCount = 0;
+  const errors: string[] = [];
+
+  for (const t of tabsToSync) {
+    const res = await saveTabulacaoSupabase(t);
+    if (res.error) {
+      errors.push(`${t.protocolo}: ${res.error}`);
+    } else {
+      successCount++;
+    }
+  }
+
+  return { successCount, errors };
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, CheckCircle2, Sparkles } from 'lucide-react';
+import { Search, CheckCircle2, Sparkles, AlertCircle, X, Copy, Check } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { CpfSearch } from './components/CpfSearch';
 import { AlunoCard } from './components/AlunoCard';
@@ -28,6 +28,7 @@ import {
   saveBaseAtendimentoBatchSupabase,
   deleteBaseAtendimentoItemSupabase,
   searchAlunoByCpfSupabase,
+  searchAlunosByCpfSupabase,
   subscribeToRealtimePresence,
   subscribeToDatabaseChanges,
   PresenceUser
@@ -102,11 +103,49 @@ export default function App() {
     }
   }, [currentUser, activeTab]);
 
+  // Set of known mock CPF and Protocol identifiers to purge permanently from local storage
+  const MOCK_CPFS = new Set([
+    '12345678900',
+    '98765432111',
+    '45678912322',
+    '78912345633',
+    '32165498744',
+  ]);
+
+  const MOCK_PROTOCOLS = new Set([
+    'ATD-20260829-1042',
+    'ATD-20260828-9820',
+    'ATD-20260827-4412',
+    'ATD-20260826-3390',
+    'ATD-20260825-7711',
+    'ATD-20260825-8822',
+    'ATD-20260824-1133',
+    'ATD-20260823-9944',
+  ]);
+
+  const isMockAluno = (a: Partial<Aluno>): boolean => {
+    if (!a) return false;
+    if (a.id && (a.id.startsWith('alu-0') || a.id.startsWith('alu-'))) return true;
+    const digits = cleanDigits(a.cpf || '');
+    if (MOCK_CPFS.has(digits)) return true;
+    return false;
+  };
+
+  const isMockTabulacao = (t: Partial<Tabulacao>): boolean => {
+    if (!t) return false;
+    if (t.id && (t.id.startsWith('tab-0') || t.id.startsWith('tab-'))) return true;
+    if (t.protocolo && MOCK_PROTOCOLS.has(t.protocolo)) return true;
+    return false;
+  };
+
   // Persistence State for Students and Tabulations
   const [alunos, setAlunos] = useState<Aluno[]>(() => {
     try {
       const saved = localStorage.getItem('tabulacoes_alunos_db');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: Aluno[] = JSON.parse(saved);
+        return parsed.filter((a) => !isMockAluno(a));
+      }
     } catch (e) {
       console.error(e);
     }
@@ -116,12 +155,37 @@ export default function App() {
   const [tabulacoes, setTabulacoes] = useState<Tabulacao[]>(() => {
     try {
       const saved = localStorage.getItem('tabulacoes_records_db');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: Tabulacao[] = JSON.parse(saved);
+        return parsed.filter((t) => !isMockTabulacao(t));
+      }
     } catch (e) {
       console.error(e);
     }
     return INITIAL_TABULACOES;
   });
+
+  // Limpeza automática imediata de dados mockados no localStorage
+  useEffect(() => {
+    try {
+      const savedA = localStorage.getItem('tabulacoes_alunos_db');
+      if (savedA) {
+        const parsedA: Aluno[] = JSON.parse(savedA);
+        const filteredA = parsedA.filter((a) => !isMockAluno(a));
+        localStorage.setItem('tabulacoes_alunos_db', JSON.stringify(filteredA));
+        setAlunos(filteredA);
+      }
+      const savedT = localStorage.getItem('tabulacoes_records_db');
+      if (savedT) {
+        const parsedT: Tabulacao[] = JSON.parse(savedT);
+        const filteredT = parsedT.filter((t) => !isMockTabulacao(t));
+        localStorage.setItem('tabulacoes_records_db', JSON.stringify(filteredT));
+        setTabulacoes(filteredT);
+      }
+    } catch (err) {
+      console.warn('Erro ao purgar dados mock do localStorage:', err);
+    }
+  }, []);
 
   // Persistence State for Base de Atendimento (Campanha WhatsApp)
   const [baseAtendimento, setBaseAtendimento] = useState<BaseAtendimentoItem[]>(() => {
@@ -134,6 +198,55 @@ export default function App() {
     return INITIAL_BASE_ATENDIMENTO;
   });
 
+  // Handlers para remoção de registros locais
+  const handleClearLocalRecords = () => {
+    setAlunos((prev) => {
+      const filtered = prev.filter((a) => !isMockAluno(a));
+      try {
+        localStorage.setItem('tabulacoes_alunos_db', JSON.stringify(filtered));
+      } catch (e) {}
+      return filtered;
+    });
+
+    setTabulacoes((prev) => {
+      const filtered = prev.filter((t) => !isMockTabulacao(t));
+      try {
+        localStorage.setItem('tabulacoes_records_db', JSON.stringify(filtered));
+      } catch (e) {}
+      return filtered;
+    });
+
+    loadCloudData(true);
+  };
+
+  const handleDeleteSingleLocalAluno = (aluno: Aluno) => {
+    setAlunos((prev) => {
+      const targetCpf = cleanDigits(aluno.cpf);
+      const targetMat = (aluno.matricula || aluno.ra || '').trim().toLowerCase();
+      const next = prev.filter(
+        (a) =>
+          !(
+            cleanDigits(a.cpf) === targetCpf &&
+            (a.matricula || a.ra || '').trim().toLowerCase() === targetMat
+          ) && a.id !== aluno.id
+      );
+      try {
+        localStorage.setItem('tabulacoes_alunos_db', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const handleDeleteSingleLocalTabulacao = (tab: Tabulacao) => {
+    setTabulacoes((prev) => {
+      const next = prev.filter((t) => t.protocolo !== tab.protocolo && t.id !== tab.id);
+      try {
+        localStorage.setItem('tabulacoes_records_db', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
   // Initial Cloud Data Load (Cached & Throttled)
   const loadCloudData = async (force = false) => {
     try {
@@ -145,16 +258,41 @@ export default function App() {
       ]);
 
       if (cloudAlunos.data && cloudAlunos.data.length > 0) {
-        setAlunos(cloudAlunos.data);
+        setAlunos((prev) => {
+          const cleanPrev = prev.filter((a) => !isMockAluno(a));
+          const cloudSet = new Set(
+            cloudAlunos.data!.map(
+              (a) => `${cleanDigits(a.cpf)}|${(a.matricula || a.ra || '').trim().toLowerCase()}`
+            )
+          );
+          // Mantém registros cadastrados localmente que ainda não subiram para o Supabase (e não são mock)
+          const localOnly = cleanPrev.filter(
+            (l) => !cloudSet.has(`${cleanDigits(l.cpf)}|${(l.matricula || l.ra || '').trim().toLowerCase()}`)
+          );
+          return [...localOnly, ...cloudAlunos.data!];
+        });
       }
       if (cloudTabs.data && cloudTabs.data.length > 0) {
-        setTabulacoes(cloudTabs.data);
+        setTabulacoes((prev) => {
+          const cleanPrev = prev.filter((t) => !isMockTabulacao(t));
+          const cloudProtocols = new Set(cloudTabs.data!.map((t) => t.protocolo));
+          const localOnly = cleanPrev.filter((l) => !cloudProtocols.has(l.protocolo));
+          return [...localOnly, ...cloudTabs.data!];
+        });
       }
       if (cloudUsrs.data && cloudUsrs.data.length > 0) {
-        setUsuarios(cloudUsrs.data);
+        setUsuarios((prev) => {
+          const cloudUsernames = new Set(cloudUsrs.data!.map((u) => u.usuario.toLowerCase()));
+          const localOnly = prev.filter((l) => !cloudUsernames.has(l.usuario.toLowerCase()));
+          return [...localOnly, ...cloudUsrs.data!];
+        });
       }
       if (cloudBase.data && cloudBase.data.length > 0) {
-        setBaseAtendimento(cloudBase.data);
+        setBaseAtendimento((prev) => {
+          const cloudMats = new Set(cloudBase.data!.map((b) => b.matricula.toLowerCase()));
+          const localOnly = prev.filter((l) => !cloudMats.has(l.matricula.toLowerCase()));
+          return [...localOnly, ...cloudBase.data!];
+        });
       }
     } catch (err) {
       console.warn('Supabase initial fetch check:', err);
@@ -266,10 +404,12 @@ export default function App() {
   // Active Selected Student & Search State (starts empty until searched or registered)
   const [currentCpf, setCurrentCpf] = useState<string>('');
   const [selectedAluno, setSelectedAluno] = useState<Aluno | null>(null);
+  const [matchingAlunos, setMatchingAlunos] = useState<Aluno[]>([]);
   const [searchAttempted, setSearchAttempted] = useState<boolean>(false);
 
   // Modal States
   const [isAlunoModalOpen, setIsAlunoModalOpen] = useState(false);
+  const [isNewMatriculaModal, setIsNewMatriculaModal] = useState(false);
   const [alunoToEdit, setAlunoToEdit] = useState<Aluno | null>(null);
   const [initialCpfForModal, setInitialCpfForModal] = useState<string>('');
   const [isHistoricoAlunoModalOpen, setIsHistoricoAlunoModalOpen] = useState(false);
@@ -407,82 +547,200 @@ export default function App() {
     }
   };
 
-  // Search Aluno by CPF
+  // Select specific Aluno matrícula
+  const handleSelectAluno = (aluno: Aluno) => {
+    setSelectedAluno(aluno);
+    setCurrentCpf(aluno.cpf);
+  };
+
+  // Search Aluno by CPF (supports multiple matriculas for same CPF)
   const handleSearchCpf = async (cpfToSearch: string) => {
     const rawQuery = normalizeCpf(cpfToSearch);
     if (!rawQuery) {
       setSelectedAluno(null);
+      setMatchingAlunos([]);
       setSearchAttempted(false);
       return;
     }
 
     setSearchAttempted(true);
 
-    const findAlunoByCpf = (items: Aluno[]) =>
-      items.find((a) => normalizeCpf(a.cpf) === rawQuery);
+    // 1. Gather all local matching alunos with this CPF
+    const localMatches = alunos.filter((a) => normalizeCpf(a.cpf) === rawQuery);
+    let allMatches: Aluno[] = [...localMatches];
 
-    const found = findAlunoByCpf(alunos);
-
-    if (found) {
-      setSelectedAluno(found);
-      return;
-    }
-
+    // 2. Query Supabase directly for this CPF to catch all matriculas registered
     try {
-      // Direct query in Supabase (handles leading zeros, mask, variations) with zero-redundancy single-record query
-      const directSearch = await searchAlunoByCpfSupabase(cpfToSearch);
-      if (directSearch.data) {
-        setAlunos((prev) => {
-          const exists = prev.some(
-            (a) => a.id === directSearch.data!.id || normalizeCpf(a.cpf) === normalizeCpf(directSearch.data!.cpf)
+      const dbSearch = await searchAlunosByCpfSupabase(cpfToSearch);
+      if (dbSearch.data && dbSearch.data.length > 0) {
+        for (const remoteAluno of dbSearch.data) {
+          const alreadyInList = allMatches.some(
+            (m) =>
+              m.id === remoteAluno.id ||
+              (normalizeCpf(m.cpf) === normalizeCpf(remoteAluno.cpf) &&
+                (m.matricula || '').trim() === (remoteAluno.matricula || '').trim())
           );
-          return exists
-            ? prev.map((a) =>
-                a.id === directSearch.data!.id || normalizeCpf(a.cpf) === normalizeCpf(directSearch.data!.cpf)
-                  ? directSearch.data!
-                  : a
-              )
-            : [directSearch.data!, ...prev];
+          if (!alreadyInList) {
+            allMatches.push(remoteAluno);
+          }
+        }
+
+        // Also ensure main alunos list has the remote ones
+        setAlunos((prev) => {
+          const updated = [...prev];
+          for (const ra of dbSearch.data!) {
+            const idx = updated.findIndex(
+              (a) =>
+                a.id === ra.id ||
+                (normalizeCpf(a.cpf) === normalizeCpf(ra.cpf) &&
+                  (a.matricula || '').trim() === (ra.matricula || '').trim())
+            );
+            if (idx >= 0) {
+              updated[idx] = ra;
+            } else {
+              updated.unshift(ra);
+            }
+          }
+          return updated;
         });
-        setSelectedAluno(directSearch.data);
-        return;
       }
     } catch (err) {
-      console.warn('Falha na busca direta de aluno no Supabase por CPF:', err);
+      console.warn('Falha na busca de aluno no Supabase por CPF:', err);
     }
 
-    setSelectedAluno(null);
+    setMatchingAlunos(allMatches);
+
+    if (allMatches.length > 0) {
+      // Keep previously selected if still valid, else select the first one
+      setSelectedAluno((prevSelected) => {
+        if (
+          prevSelected &&
+          allMatches.some(
+            (m) =>
+              m.id === prevSelected.id ||
+              (normalizeCpf(m.cpf) === normalizeCpf(prevSelected.cpf) &&
+                (m.matricula || '').trim() === (prevSelected.matricula || '').trim())
+          )
+        ) {
+          return (
+            allMatches.find(
+              (m) =>
+                m.id === prevSelected.id ||
+                (normalizeCpf(m.cpf) === normalizeCpf(prevSelected.cpf) &&
+                  (m.matricula || '').trim() === (prevSelected.matricula || '').trim())
+            ) || allMatches[0]
+          );
+        }
+        return allMatches[0];
+      });
+    } else {
+      setSelectedAluno(null);
+    }
   };
 
-  // Save or Update Aluno
-  const handleSaveAluno = (aluno: Aluno) => {
+  // Feedback de Sucesso/Alerta após Salvar Aluno
+  const [alunoSyncFeedback, setAlunoSyncFeedback] = useState<{
+    type: 'success' | 'error' | 'warning';
+    title: string;
+    message: string;
+    sqlHint?: string;
+  } | null>(null);
+  const [copiedSqlHint, setCopiedSqlHint] = useState(false);
+
+  // Save or Update Aluno (distinguishing between editing same matricula or registering a new matricula for same CPF)
+  const handleSaveAluno = async (aluno: Aluno) => {
     const formattedAluno = {
       ...aluno,
       cpf: formatCompleteCPF(aluno.cpf),
     };
 
+    const cleanMat = (formattedAluno.matricula || '').trim();
+    const cleanCpf = normalizeCpf(formattedAluno.cpf);
+
+    // An enrollment is only identical if it matches the id OR (same CPF and same matricula)
     const exists = alunos.some(
-      (a) => a.id === formattedAluno.id || normalizeCpf(a.cpf) === normalizeCpf(formattedAluno.cpf)
+      (a) =>
+        a.id === formattedAluno.id ||
+        (normalizeCpf(a.cpf) === cleanCpf && (a.matricula || '').trim() === cleanMat)
     );
     
     if (exists) {
       setAlunos((prev) =>
         prev.map((a) =>
-          a.id === formattedAluno.id || normalizeCpf(a.cpf) === normalizeCpf(formattedAluno.cpf) ? formattedAluno : a
+          a.id === formattedAluno.id ||
+          (normalizeCpf(a.cpf) === cleanCpf && (a.matricula || '').trim() === cleanMat)
+            ? formattedAluno
+            : a
         )
       );
     } else {
+      // Adding as a distinct record (e.g. new enrollment for existing CPF)
       setAlunos((prev) => [formattedAluno, ...prev]);
     }
 
-    // Background sync to Supabase
-    saveAlunoSupabase(formattedAluno).catch((e) => console.warn('Supabase save aluno sync:', e));
+    // Update matchingAlunos for the active search
+    setMatchingAlunos((prev) => {
+      const filtered = prev.filter(
+        (a) =>
+          a.id !== formattedAluno.id &&
+          !(normalizeCpf(a.cpf) === cleanCpf && (a.matricula || '').trim() === cleanMat)
+      );
+      return [formattedAluno, ...filtered];
+    });
 
-    // Auto-select this student for immediate tabulation
+    // Auto-select this specific student enrollment for immediate tabulation
     setSelectedAluno(formattedAluno);
     setCurrentCpf(formattedAluno.cpf);
     setSearchAttempted(false);
     setActiveTab('tabulacao');
+
+    // Supabase save with explicit error detection and feedback
+    try {
+      const syncResult = await saveAlunoSupabase(formattedAluno);
+      if (syncResult && syncResult.error) {
+        console.error('Erro ao salvar aluno no Supabase:', syncResult.error);
+        
+        const isConstraintConflict = 
+          syncResult.error.includes('alunos_cpf_key') || 
+          syncResult.error.includes('duplicate key') ||
+          syncResult.error.includes('MIGRATION NECESSÁRIA');
+
+        if (isConstraintConflict) {
+          setAlunoSyncFeedback({
+            type: 'error',
+            title: 'Supabase: Tabela Alunos Bloqueou 2ª Matrícula',
+            message: 'O cadastro foi salvo localmente, mas o Supabase ainda possui a restrição antiga (alunos_cpf_key) que impede o mesmo CPF com matrículas diferentes. Execute o comando SQL abaixo no seu Supabase SQL Editor para liberar múltiplas matrículas.',
+            sqlHint: `ALTER TABLE public.alunos DROP CONSTRAINT IF EXISTS alunos_cpf_key;\nDROP INDEX IF EXISTS public.alunos_cpf_key;\nALTER TABLE public.alunos DROP CONSTRAINT IF EXISTS alunos_cpf_matricula_key;\nALTER TABLE public.alunos ADD CONSTRAINT alunos_cpf_matricula_key UNIQUE (cpf, matricula);`
+          });
+        } else {
+          setAlunoSyncFeedback({
+            type: 'warning',
+            title: 'Aviso de Sincronização com Supabase',
+            message: `O aluno foi salvo localmente, mas houve um erro ao enviar para a nuvem: ${syncResult.error}`
+          });
+          setTimeout(() => setAlunoSyncFeedback(null), 6000);
+        }
+      } else if (syncResult && syncResult.data) {
+        // Successfully saved in Supabase
+        const remoteAluno = syncResult.data;
+        if (remoteAluno && remoteAluno.id && remoteAluno.id !== formattedAluno.id) {
+          // Update local state with real Supabase UUID
+          const updatedWithId = { ...formattedAluno, id: remoteAluno.id };
+          setAlunos((prev) => prev.map((a) => (a.id === formattedAluno.id ? updatedWithId : a)));
+          setMatchingAlunos((prev) => prev.map((a) => (a.id === formattedAluno.id ? updatedWithId : a)));
+          setSelectedAluno(updatedWithId);
+        }
+
+        setAlunoSyncFeedback({
+          type: 'success',
+          title: 'Aluno e Matrícula Salvos com Sucesso!',
+          message: `Cadastro da matrícula ${formattedAluno.matricula || 'N/A'} sincronizado com o banco Supabase na nuvem.`
+        });
+        setTimeout(() => setAlunoSyncFeedback(null), 4000);
+      }
+    } catch (err: any) {
+      console.warn('Supabase save aluno exception:', err);
+    }
   };
 
   // Feedback de Sucesso após Salvar Tabulação
@@ -519,6 +777,7 @@ export default function App() {
     setTimeout(() => {
       setSuccessToastMessage(null);
       setSelectedAluno(null);
+      setMatchingAlunos([]);
       setCurrentCpf('');
       setSearchAttempted(false);
     }, 3000);
@@ -527,19 +786,31 @@ export default function App() {
   // Reset tabulação to initial CPF search view
   const handleResetTabulacao = () => {
     setSelectedAluno(null);
+    setMatchingAlunos([]);
     setCurrentCpf('');
     setSearchAttempted(false);
   };
 
   // Open Modal for New Aluno
   const handleOpenNovoAlunoModal = (preFillCpf?: string) => {
+    setIsNewMatriculaModal(false);
     setAlunoToEdit(null);
     setInitialCpfForModal(preFillCpf || currentCpf || '');
     setIsAlunoModalOpen(true);
   };
 
+  // Open Modal for Nova Matrícula for existing student
+  const handleOpenNovaMatriculaModal = (aluno?: Aluno | null) => {
+    setIsNewMatriculaModal(true);
+    setAlunoToEdit(null);
+    const targetAluno = aluno || selectedAluno || matchingAlunos[0];
+    setInitialCpfForModal(targetAluno?.cpf || currentCpf || '');
+    setIsAlunoModalOpen(true);
+  };
+
   // Open Modal for Edit Aluno
   const handleEditAluno = (aluno: Aluno) => {
+    setIsNewMatriculaModal(false);
     setAlunoToEdit(aluno);
     setInitialCpfForModal(aluno.cpf);
     setIsAlunoModalOpen(true);
@@ -661,12 +932,103 @@ export default function App() {
               </div>
             )}
 
+            {/* Banner de Feedback de Sincronização do Aluno (com Suporte a Múltiplas Matrículas e SQL) */}
+            {alunoSyncFeedback && (
+              <div
+                className={`p-5 rounded-2xl border transition-all animate-in slide-in-from-top-2 fade-in duration-300 ${
+                  alunoSyncFeedback.type === 'error'
+                    ? 'bg-rose-50/90 border-rose-200 text-rose-900 shadow-sm'
+                    : alunoSyncFeedback.type === 'warning'
+                    ? 'bg-amber-50 border-amber-200 text-amber-900 shadow-sm'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-900 shadow-sm'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                        alunoSyncFeedback.type === 'error'
+                          ? 'bg-rose-600 text-white shadow-sm'
+                          : alunoSyncFeedback.type === 'warning'
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-emerald-600 text-white shadow-sm'
+                      }`}
+                    >
+                      {alunoSyncFeedback.type === 'error' ? (
+                        <AlertCircle className="w-5 h-5" />
+                      ) : alunoSyncFeedback.type === 'warning' ? (
+                        <AlertCircle className="w-5 h-5" />
+                      ) : (
+                        <CheckCircle2 className="w-5 h-5" />
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-black tracking-tight">
+                        {alunoSyncFeedback.title}
+                      </h4>
+                      <p className="text-xs leading-relaxed opacity-90 max-w-4xl">
+                        {alunoSyncFeedback.message}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setAlunoSyncFeedback(null)}
+                    className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-black/5 transition-all cursor-pointer"
+                    title="Fechar aviso"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Se for erro de restrição antiga no Supabase, exibe o comando SQL pronto para copiar */}
+                {alunoSyncFeedback.sqlHint && (
+                  <div className="mt-4 pt-3 border-t border-rose-200/80 space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider">
+                        Execute isto no SQL Editor do seu Supabase para corrigir em 5 segundos:
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(alunoSyncFeedback.sqlHint || '');
+                            setCopiedSqlHint(true);
+                            setTimeout(() => setCopiedSqlHint(false), 2500);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold rounded-lg transition-all cursor-pointer shadow-sm"
+                        >
+                          {copiedSqlHint ? <Check className="w-3.5 h-3.5 text-emerald-200" /> : <Copy className="w-3.5 h-3.5" />}
+                          {copiedSqlHint ? 'Comando Copiado!' : 'Copiar Comando SQL'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('supabase')}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-rose-300 text-rose-800 hover:bg-rose-100/50 text-xs font-bold rounded-lg transition-all cursor-pointer"
+                        >
+                          Abrir Conexão Supabase
+                        </button>
+                      </div>
+                    </div>
+
+                    <pre className="p-3 bg-slate-950 text-emerald-300 rounded-xl font-mono text-[11px] overflow-x-auto border border-slate-800 leading-relaxed shadow-inner">
+                      {alunoSyncFeedback.sqlHint}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Step 1: CPF Search & Identification */}
             <CpfSearch
               currentCpf={currentCpf}
               onCpfChange={setCurrentCpf}
               onSearch={handleSearchCpf}
               selectedAluno={selectedAluno}
+              matchingAlunos={matchingAlunos}
+              onSelectAluno={handleSelectAluno}
+              onAddNewMatricula={() => handleOpenNovaMatriculaModal(selectedAluno || matchingAlunos[0])}
               searchAttempted={searchAttempted}
               onOpenNovoAlunoModal={handleOpenNovoAlunoModal}
               onClear={handleResetTabulacao}
@@ -675,9 +1037,16 @@ export default function App() {
             {/* As demais opções (Dados do Aluno e Formulário de Tabulação) são carregadas SOMENTE após consultar/selecionar o aluno */}
             {selectedAluno ? (
               <>
-                {/* Step 2: Student Academic & Contact Card */}
+                {/* Step 2: Student Academic & Contact Card with Matricula Switcher */}
                 <AlunoCard
                   aluno={selectedAluno}
+                  allAlunosWithCpf={
+                    matchingAlunos.length > 0
+                      ? matchingAlunos
+                      : alunos.filter((a) => normalizeCpf(a.cpf) === normalizeCpf(selectedAluno.cpf))
+                  }
+                  onSelectAluno={handleSelectAluno}
+                  onAddNewMatricula={() => handleOpenNovaMatriculaModal(selectedAluno)}
                   onEditAluno={handleEditAluno}
                   historicoAluno={historicoAlunoAtivo}
                   onOpenHistoricoAluno={() => setIsHistoricoAlunoModalOpen(true)}
@@ -764,6 +1133,9 @@ export default function App() {
             usuarios={usuarios}
             baseAtendimento={baseAtendimento}
             onSyncFromSupabase={handleSyncFromSupabase}
+            onClearLocalRecords={handleClearLocalRecords}
+            onDeleteSingleLocalAluno={handleDeleteSingleLocalAluno}
+            onDeleteSingleLocalTabulacao={handleDeleteSingleLocalTabulacao}
           />
         )}
 
@@ -795,13 +1167,20 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Modal: Cadastrar / Editar Aluno */}
+      {/* Modal: Cadastrar / Editar Aluno / Nova Matrícula */}
       <AlunoModal
         isOpen={isAlunoModalOpen}
         onClose={() => setIsAlunoModalOpen(false)}
         onSave={handleSaveAluno}
         alunoToEdit={alunoToEdit}
         initialCpf={initialCpfForModal}
+        isNewMatricula={isNewMatriculaModal}
+        existingAluno={
+          selectedAluno ||
+          matchingAlunos.find((a) => normalizeCpf(a.cpf) === normalizeCpf(initialCpfForModal)) ||
+          alunos.find((a) => normalizeCpf(a.cpf) === normalizeCpf(initialCpfForModal)) ||
+          null
+        }
       />
 
       {/* Modal: Histórico de Atendimentos do Aluno Ativo */}

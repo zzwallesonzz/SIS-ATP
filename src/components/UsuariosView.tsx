@@ -28,7 +28,8 @@ import {
   LogOut,
   Clock,
   ArrowUpDown,
-  Power
+  Power,
+  Headphones
 } from 'lucide-react';
 import { Usuario, PerfilUsuario } from '../types';
 import { formatDateTimeBR, getSaoPauloISOString } from '../utils/cpf';
@@ -394,6 +395,205 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
           </button>
         </div>
       )}
+
+      {/* Diretrizes de Perfis e Permissões (Cards) */}
+      <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">
+                Diretrizes de Perfis & Permissões do Sistema
+              </h2>
+              <p className="text-xs text-slate-500">
+                Regras de controle de acesso, visualização de relatórios e escopo operacional por perfil
+              </p>
+            </div>
+          </div>
+          <span className="text-[11px] font-medium text-slate-400 self-start sm:self-center">
+            Clique no perfil para filtrar a tabela abaixo
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5">
+          {/* Card Operador */}
+          <button
+            type="button"
+            onClick={() => setFilterPerfil(filterPerfil === 'Operador' ? 'Todos' : 'Operador')}
+            className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer ${
+              filterPerfil === 'Operador'
+                ? 'bg-indigo-50/90 border-indigo-500 ring-2 ring-indigo-400/40 shadow-sm'
+                : 'bg-slate-50/70 hover:bg-slate-50 border-slate-200/80 hover:border-slate-300'
+            }`}
+          >
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="w-8 h-8 rounded-xl bg-indigo-100/80 border border-indigo-200 text-indigo-700 flex items-center justify-center">
+                  <Headphones className="w-4 h-4" />
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+                  Operacional
+                </span>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                  <span>Operador</span>
+                  <span className="text-[11px] font-semibold text-slate-500">{metrics.operadores} usuários</span>
+                </p>
+                <p className="text-[11px] text-slate-600 mt-1.5 leading-snug">
+                  Tabulação de atendimento. No <strong>Histórico</strong>, visualiza estritamente seus próprios registros. Sem acesso à Base ou Gestão de Usuários.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] font-medium text-indigo-700">
+              <span>{filterPerfil === 'Operador' ? 'Filtro Ativo' : 'Filtrar Operadores'}</span>
+              <ChevronRight className="w-3 h-3" />
+            </div>
+          </button>
+
+          {/* Card Supervisor */}
+          <button
+            type="button"
+            onClick={() => setFilterPerfil(filterPerfil === 'Supervisor' ? 'Todos' : 'Supervisor')}
+            className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer ${
+              filterPerfil === 'Supervisor'
+                ? 'bg-purple-50/90 border-purple-500 ring-2 ring-purple-400/40 shadow-sm'
+                : 'bg-slate-50/70 hover:bg-slate-50 border-slate-200/80 hover:border-slate-300'
+            }`}
+          >
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="w-8 h-8 rounded-xl bg-purple-100/80 border border-purple-200 text-purple-700 flex items-center justify-center">
+                  <BadgeCheck className="w-4 h-4" />
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                  Gestão Equipe
+                </span>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                  <span>Supervisor</span>
+                  <span className="text-[11px] font-semibold text-slate-500">{metrics.supervisores} usuários</span>
+                </p>
+                <p className="text-[11px] text-slate-600 mt-1.5 leading-snug">
+                  Visualização de todo o histórico da equipe, acompanhamento de metas, Base de Atendimento e gestão dos operadores subordinados.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] font-medium text-purple-700">
+              <span>{filterPerfil === 'Supervisor' ? 'Filtro Ativo' : 'Filtrar Supervisores'}</span>
+              <ChevronRight className="w-3 h-3" />
+            </div>
+          </button>
+
+          {/* Card Gerencial */}
+          <button
+            type="button"
+            onClick={() => setFilterPerfil(filterPerfil === 'Gerencial' ? 'Todos' : 'Gerencial')}
+            className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer ${
+              filterPerfil === 'Gerencial'
+                ? 'bg-cyan-50/90 border-cyan-500 ring-2 ring-cyan-400/40 shadow-sm'
+                : 'bg-slate-50/70 hover:bg-slate-50 border-slate-200/80 hover:border-slate-300'
+            }`}
+          >
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="w-8 h-8 rounded-xl bg-cyan-100/80 border border-cyan-200 text-cyan-700 flex items-center justify-center">
+                  <BriefcaseBusiness className="w-4 h-4" />
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 border border-cyan-200">
+                  Estratégico
+                </span>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                  <span>Gerencial</span>
+                  <span className="text-[11px] font-semibold text-slate-500">{metrics.gerenciais} usuários</span>
+                </p>
+                <p className="text-[11px] text-slate-600 mt-1.5 leading-snug">
+                  Acesso completo ao Dashboard executivo, Histórico geral e Gestão de Usuários, com restrição à tela técnica Supabase.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] font-medium text-cyan-700">
+              <span>{filterPerfil === 'Gerencial' ? 'Filtro Ativo' : 'Filtrar Gerenciais'}</span>
+              <ChevronRight className="w-3 h-3" />
+            </div>
+          </button>
+
+          {/* Card Cliente */}
+          <button
+            type="button"
+            onClick={() => setFilterPerfil(filterPerfil === 'Cliente' ? 'Todos' : 'Cliente')}
+            className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer ${
+              filterPerfil === 'Cliente'
+                ? 'bg-amber-50/90 border-amber-500 ring-2 ring-amber-400/40 shadow-sm'
+                : 'bg-slate-50/70 hover:bg-slate-50 border-slate-200/80 hover:border-slate-300'
+            }`}
+          >
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="w-8 h-8 rounded-xl bg-amber-100/80 border border-amber-200 text-amber-700 flex items-center justify-center">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                  Consulta & Indicadores
+                </span>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                  <span>Cliente</span>
+                  <span className="text-[11px] font-semibold text-slate-500">{metrics.clientes} usuários</span>
+                </p>
+                <p className="text-[11px] text-slate-600 mt-1.5 leading-snug">
+                  Acesso dedicado e exclusivo às abas de <strong>Histórico</strong>, <strong>Base de Atendimento</strong> e <strong>Dashboard</strong> gerencial.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] font-medium text-amber-700">
+              <span>{filterPerfil === 'Cliente' ? 'Filtro Ativo' : 'Filtrar Clientes'}</span>
+              <ChevronRight className="w-3 h-3" />
+            </div>
+          </button>
+
+          {/* Card ADM */}
+          <button
+            type="button"
+            onClick={() => setFilterPerfil(filterPerfil === 'ADM' ? 'Todos' : 'ADM')}
+            className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer ${
+              filterPerfil === 'ADM'
+                ? 'bg-emerald-50/90 border-emerald-500 ring-2 ring-emerald-400/40 shadow-sm'
+                : 'bg-slate-50/70 hover:bg-slate-50 border-slate-200/80 hover:border-slate-300'
+            }`}
+          >
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="w-8 h-8 rounded-xl bg-emerald-100/80 border border-emerald-200 text-emerald-700 flex items-center justify-center">
+                  <Shield className="w-4 h-4" />
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Acesso Total
+                </span>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                  <span>ADM (Administrador)</span>
+                  <span className="text-[11px] font-semibold text-slate-500">{metrics.adms} usuários</span>
+                </p>
+                <p className="text-[11px] text-slate-600 mt-1.5 leading-snug">
+                  Acesso irrestrito a todos os módulos, criação/edição de usuários, operadores, parametrização e conexão Supabase Ready.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] font-medium text-emerald-700">
+              <span>{filterPerfil === 'ADM' ? 'Filtro Ativo' : 'Filtrar ADMs'}</span>
+              <ChevronRight className="w-3 h-3" />
+            </div>
+          </button>
+        </div>
+      </div>
 
       {/* Main Content: Users Management Table */}
       <div className="space-y-4">

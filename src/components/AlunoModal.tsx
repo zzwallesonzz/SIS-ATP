@@ -21,6 +21,8 @@ interface AlunoModalProps {
   onSave: (aluno: Aluno) => void;
   alunoToEdit?: Aluno | null;
   initialCpf?: string;
+  isNewMatricula?: boolean;
+  existingAluno?: Aluno | null;
 }
 
 export const AlunoModal: React.FC<AlunoModalProps> = ({
@@ -29,8 +31,10 @@ export const AlunoModal: React.FC<AlunoModalProps> = ({
   onSave,
   alunoToEdit,
   initialCpf,
+  isNewMatricula = false,
+  existingAluno,
 }) => {
-  const isEditing = !!alunoToEdit;
+  const isEditing = !!alunoToEdit && !isNewMatricula;
 
   const [formData, setFormData] = useState({
     cpf: '',
@@ -43,13 +47,21 @@ export const AlunoModal: React.FC<AlunoModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (alunoToEdit) {
+    if (alunoToEdit && !isNewMatricula) {
       setFormData({
         cpf: alunoToEdit.cpf || '',
         nome: alunoToEdit.nome || '',
         matricula: alunoToEdit.matricula || alunoToEdit.ra || '',
         email: alunoToEdit.email || '',
         telefone: alunoToEdit.telefone || '',
+      });
+    } else if (isNewMatricula && existingAluno) {
+      setFormData({
+        cpf: existingAluno.cpf || initialCpf || '',
+        nome: existingAluno.nome || '',
+        matricula: '',
+        email: existingAluno.email || '',
+        telefone: existingAluno.telefone || '',
       });
     } else {
       setFormData({
@@ -61,7 +73,7 @@ export const AlunoModal: React.FC<AlunoModalProps> = ({
       });
     }
     setErrors({});
-  }, [alunoToEdit, initialCpf, isOpen]);
+  }, [alunoToEdit, initialCpf, isNewMatricula, existingAluno, isOpen]);
 
   if (!isOpen) return null;
 
@@ -110,20 +122,23 @@ export const AlunoModal: React.FC<AlunoModalProps> = ({
 
     const matriculaVal = formData.matricula.trim();
 
+    // Se estiver editando um cadastro existente, preserva o ID. Se for nova matrícula, gera novo ID
+    const newId = isEditing && alunoToEdit ? alunoToEdit.id : `alu-${Date.now()}`;
+
     const alunoCompleto: Aluno = {
-      id: alunoToEdit ? alunoToEdit.id : `alu-${Date.now()}`,
+      id: newId,
       cpf: formData.cpf.trim(),
       nome: formData.nome.trim(),
       matricula: matriculaVal,
       ra: matriculaVal,
       email: formData.email.trim(),
       telefone: formData.telefone.trim(),
-      curso: alunoToEdit?.curso || 'Geral',
-      polo: alunoToEdit?.polo || 'Sede Principal',
-      statusAcademico: alunoToEdit?.statusAcademico || 'ATIVO',
-      modalidade: alunoToEdit?.modalidade || 'Presencial',
-      semestre: alunoToEdit?.semestre || '1º Semestre',
-      dataCadastro: alunoToEdit ? alunoToEdit.dataCadastro : getSaoPauloDateString(),
+      curso: (isEditing ? alunoToEdit?.curso : existingAluno?.curso) || '',
+      polo: (isEditing ? alunoToEdit?.polo : existingAluno?.polo) || '',
+      statusAcademico: isEditing ? (alunoToEdit?.statusAcademico || 'ATIVO') : 'ATIVO',
+      modalidade: isEditing ? (alunoToEdit?.modalidade || 'Presencial') : (existingAluno?.modalidade || 'Presencial'),
+      semestre: isEditing ? (alunoToEdit?.semestre || '1º Semestre') : '1º Semestre',
+      dataCadastro: isEditing && alunoToEdit ? alunoToEdit.dataCadastro : getSaoPauloDateString(),
     };
 
     onSave(alunoCompleto);
@@ -144,27 +159,49 @@ export const AlunoModal: React.FC<AlunoModalProps> = ({
         <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-inner">
-              {isEditing ? <GraduationCap className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
+              {isEditing ? (
+                <GraduationCap className="w-5 h-5" />
+              ) : isNewMatricula ? (
+                <Hash className="w-5 h-5" />
+              ) : (
+                <UserPlus className="w-5 h-5" />
+              )}
             </div>
             <div>
               <h3 className="font-bold text-base">
-                {isEditing ? 'Editar Cadastro do Aluno' : 'Cadastrar Novo Aluno'}
+                {isEditing 
+                  ? 'Editar Cadastro do Aluno' 
+                  : isNewMatricula 
+                  ? 'Nova Matrícula para o Aluno' 
+                  : 'Cadastrar Novo Aluno'}
               </h3>
               <p className="text-xs text-slate-400">
                 {isEditing 
-                  ? 'Atualize os dados cadastrais do aluno' 
-                  : 'Informe os dados essenciais para identificação e atendimento'}
+                  ? 'Atualize os dados desta matrícula' 
+                  : isNewMatricula 
+                  ? `Cadastre uma matrícula adicional para ${formData.nome || 'o aluno'}`
+                  : 'Informe os dados para identificação e atendimento'}
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Informative banner if adding new matricula */}
+        {isNewMatricula && (
+          <div className="bg-indigo-50 border-b border-indigo-100 px-6 py-2.5 flex items-center gap-2 text-xs text-indigo-900">
+            <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>
+              O CPF e dados do aluno foram mantidos. Digite a <strong>nova matrícula</strong> (12 dígitos) abaixo.
+            </span>
+          </div>
+        )}
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -310,17 +347,17 @@ export const AlunoModal: React.FC<AlunoModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors"
+              className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
               id="modal-btn-salvar-aluno"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm shadow-indigo-500/20 transition-all active:scale-[0.98]"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm shadow-indigo-500/20 transition-all active:scale-[0.98] cursor-pointer"
             >
               <Save className="w-4 h-4" />
-              {isEditing ? 'Salvar Alterações' : 'Cadastrar e Selecionar'}
+              {isEditing ? 'Salvar Alterações' : isNewMatricula ? 'Cadastrar Nova Matrícula' : 'Cadastrar e Selecionar'}
             </button>
           </div>
 
